@@ -1,3 +1,6 @@
+/**
+ * Hostinger Node.js entry point — binds 0.0.0.0 and PORT from the environment.
+ */
 process.env.NODE_ENV = process.env.NODE_ENV || "production";
 
 const { createServer } = require("http");
@@ -22,7 +25,7 @@ app
         res.end("Internal Server Error");
       }
     }).listen(port, hostname, () => {
-      console.log(`NGO Hub ready on http://${hostname}:${port}`);
+      console.log(`NGO Hub ready on http://${hostname}:${port} (NODE_ENV=${process.env.NODE_ENV})`);
     });
   })
   .catch((error) => {

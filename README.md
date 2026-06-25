@@ -109,7 +109,7 @@ URL-encode special characters in the database password (`@` → `%40`, `#` → `
 3. Connect your GitHub repo
 4. Build settings:
    - **Build command:** `npm run build`
-   - **Start command:** `npm run start` (or `npm run start:server`)
+   - **Start command:** `npm run start` (uses root `server.js`, binds `0.0.0.0` + `PORT`)
    - **Node version:** 20+
 5. Add all environment variables from the production setup step
 6. Deploy and open `/api/health` — `database.ok` and `status` should be `"ok"`
