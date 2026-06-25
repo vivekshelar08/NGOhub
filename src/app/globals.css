@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f8fafb;
+  --foreground: #1a2332;
+  --brand-red: #e31e24;
+  --brand-teal: #0d5d56;
+  --brand-blue: #0054a6;
+  --brand-mist: #f0f7f6;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+}
+
+@layer components {
+  .page-shell {
+    @apply min-h-full p-4 pb-20 sm:p-5 md:p-8 md:pb-8;
+    background: linear-gradient(to bottom right, var(--brand-mist), #ffffff, rgb(248 250 252));
+  }
+
+  .page-card {
+    @apply rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card sm:p-6;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200;
+  }
+
+  .nav-link-active {
+    @apply bg-brand-red text-white shadow-md shadow-brand-red/20;
+  }
+
+  .nav-link-idle {
+    @apply text-slate-300 hover:bg-brand-ink-light hover:text-white;
+  }
+
+  .admin-nav-link-active {
+    @apply bg-brand-teal/20 text-brand-teal-light ring-1 ring-brand-teal/30;
+  }
+
+  .stat-chip {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold;
+  }
+
+  .input-brand {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:ring-2;
+    --tw-ring-color: rgb(0 84 166 / 0.15);
+  }
+
+  .input-brand:focus {
+    border-color: var(--brand-blue);
+  }
+
+  .table-shell {
+    @apply overflow-x-auto rounded-2xl border border-slate-200/80 bg-white shadow-card;
+  }
+
+  .tab-bar-mobile {
+    @apply -mx-1 overflow-x-auto scrollbar-none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .detail-panel {
+    animation: slide-in-right 0.2s ease-out;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@layer utilities {
+  .text-gradient-brand {
+    @apply bg-gradient-to-r from-brand-teal via-brand-blue to-brand-red bg-clip-text text-transparent;
+  }
+
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}

@@ -1,0 +1,1329 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  ACCOUNTANT
+  HR
+  COORDINATOR
+  STAFF
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LEAVE
+  HALF_DAY
+}
+
+enum PayrollStatus {
+  DRAFT
+  PROCESSED
+  PAID
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum MaritalStatus {
+  SINGLE
+  MARRIED
+  DIVORCED
+  WIDOWED
+}
+
+enum EmploymentType {
+  PERMANENT
+  CONTRACT
+  PROBATION
+  INTERN
+}
+
+enum LeaveApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ServiceDeliveryStatus {
+  DATA_ENTERED
+  IN_PROGRESS
+  REJECTED
+  COMPLETED
+}
+
+enum BeneficiaryCategory {
+  GENERAL
+  SC
+  ST
+  OBC
+  EWS
+  OTHER
+}
+
+enum IdDocumentType {
+  AADHAAR
+  VOTER_ID
+  RATION_CARD
+  PAN
+  OTHER
+}
+
+enum ActivityRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum CalendarWorkType {
+  OFFICE
+  PROJECT
+  WORKSHOP
+  OTHER
+}
+
+enum HolidayType {
+  NATIONAL
+  REGIONAL
+  FESTIVAL
+  RELIGIOUS
+  OBSERVANCE
+}
+
+enum ExpenseCategory {
+  TRAVEL
+  CAMP
+  STATIONERY
+  OTHER
+}
+
+enum PaymentType {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CHEQUE
+  CARD
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ComplianceType {
+  FCRA_FC4
+  SECTION_80G
+  SECTION_12A
+  NGO_DARPAN
+  CSR_UC
+  STATUTORY_AUDIT
+  ITR
+  FORM_10BD
+  FORM_112
+  OTHER
+}
+
+enum FundRestriction {
+  UNRESTRICTED
+  RESTRICTED
+  DESIGNATED
+}
+
+enum AccountCategory {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum ExpenseFunction {
+  PROGRAM
+  ADMINISTRATIVE
+  FUNDRAISING
+  NONE
+}
+
+enum JournalEntryStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
+enum JournalSourceType {
+  MANUAL
+  EXPENSE
+  DONATION
+  PAYROLL
+  VENDOR_BILL
+  VENDOR_PAYMENT
+  BANK
+  ADJUSTMENT
+}
+
+enum VendorBillStatus {
+  DRAFT
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+enum FinancialPeriodStatus {
+  OPEN
+  CLOSED
+}
+
+enum BankAccountType {
+  DOMESTIC
+  FCRA
+  CASH
+}
+
+enum ComplianceStatus {
+  UPCOMING
+  DUE
+  FILED
+  OVERDUE
+}
+
+enum FeedbackType {
+  FEEDBACK
+  COMPLAINT
+  SATISFACTION
+}
+
+enum FeedbackStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum VaultDocCategory {
+  MOU
+  REGISTRATION
+  FCRA
+  CSR
+  AUDIT
+  BOARD
+  OTHER
+}
+
+enum DonorPipelineStage {
+  PROSPECT
+  PROPOSAL_SENT
+  NEGOTIATION
+  GRANTED
+  REPORTING
+  CLOSED
+}
+
+enum SurveyQuestionType {
+  TEXT_SHORT
+  TEXT_LONG
+  NUMBER
+  DATE
+  SINGLE_CHOICE
+  MULTI_CHOICE
+  DROPDOWN
+  RATING
+  LINEAR_SCALE
+  YES_NO
+  EMAIL
+  PHONE
+  FILE_UPLOAD
+}
+
+enum SurveyStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  ARCHIVED
+}
+
+enum SurveyResponseStatus {
+  IN_PROGRESS
+  SUBMITTED
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  name          String
+  phone         String?
+  role          Role           @default(STAFF)
+  status        UserStatus     @default(ACTIVE)
+  department    String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  lastLoginAt   DateTime?
+  refreshTokens RefreshToken[]
+
+  employeeProfile     EmployeeProfile?
+  attendanceRecords   AttendanceRecord[]
+  payrollLines        PayrollLine[]
+  performanceReceived PerformanceReview[] @relation("Reviewee")
+  performanceGiven    PerformanceReview[] @relation("Reviewer")
+  payrollRunsCreated  PayrollRun[]
+  enrollmentInvites   EnrollmentInvite[]
+
+  beneficiariesCreated     Beneficiary[]              @relation("BeneficiaryCreatedBy")
+  serviceDeliveriesEntered ServiceDelivery[]          @relation("DeliveryEnteredBy")
+  serviceDeliveriesRechecked ServiceDelivery[]        @relation("DeliveryRecheckedBy")
+  deliveryObjectionsRaised ServiceDelivery[]          @relation("DeliveryObjectionRaisedBy")
+  deliveryObjectionsCleared ServiceDelivery[]         @relation("DeliveryObjectionClearedBy")
+  deliveryStepsCompleted   DeliveryStepProgress[]     @relation("StepCompletedBy")
+  beneficiaryFollowUps     BeneficiaryFollowUp[]
+  activityRequests         ActivityRequest[]          @relation("ActivityRequests")
+  activityReviews          ActivityRequest[]          @relation("ActivityReviews")
+  expensesSubmitted        Expense[]                  @relation("ExpensesSubmitted")
+  expensesReviewed         Expense[]                  @relation("ExpensesReviewed")
+  surveysCreated           Survey[]                   @relation("SurveysCreatedBy")
+  surveyResponses          SurveyResponse[]           @relation("SurveyResponsesSubmitted")
+  vaultDocumentsUploaded   VaultDocument[]            @relation("VaultUploadedBy")
+  beneficiaryFeedbacks     BeneficiaryFeedback[]      @relation("FeedbackCreatedBy")
+  donationsRecorded        Donation[]                 @relation("DonationsRecordedBy")
+  volunteerHoursRecorded   VolunteerHour[]            @relation("VolunteerHoursRecordedBy")
+  notificationPreference   NotificationPreference?
+  inAppNotifications       InAppNotification[]        @relation("UserNotifications")
+  teamMessagesSent         TeamMessage[]                @relation("TeamMessagesSent")
+  safeguardingReports      SafeguardingIncident[]       @relation("SafeguardingReportedBy")
+  journalEntriesCreated    JournalEntry[]             @relation("JournalEntriesCreated")
+  periodsClosed            FinancialPeriod[]          @relation("PeriodsClosedBy")
+  vendorBillsCreated       VendorBill[]               @relation("VendorBillsCreated")
+  vendorPaymentsRecorded   VendorPayment[]            @relation("VendorPaymentsRecorded")
+  financeAuditLogs         FinanceAuditLog[]          @relation("FinanceAuditBy")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model EmployeeProfile {
+  id           String         @id @default(uuid())
+  userId       String         @unique
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeCode String?
+  designation  String?
+  joinDate     DateTime?
+  baseSalary   Decimal?       @db.Decimal(12, 2)
+  bankAccount  String?
+
+  confirmationDate   DateTime?
+  employmentType     EmploymentType @default(PERMANENT)
+  workLocation       String?
+  probationEndDate   DateTime?
+  fatherOrSpouseName String?
+  dateOfBirth        DateTime?
+  gender             Gender?
+  maritalStatus      MaritalStatus?
+  nationality        String?        @default("Indian")
+  bloodGroup         String?
+  permanentAddress   String?
+  currentAddress     String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  panNumber          String?
+  aadhaarNumber      String?
+  uanNumber          String?
+  esicNumber         String?
+  passportNumber     String?
+  bankName           String?
+  bankAccountNumber  String?
+  bankIfsc           String?
+  bankAccountHolderName String?
+  ctc                Decimal?       @db.Decimal(12, 2)
+  basicSalary        Decimal?       @db.Decimal(12, 2)
+  hra                Decimal?       @db.Decimal(12, 2)
+  conveyanceAllowance Decimal?      @db.Decimal(12, 2)
+  specialAllowance   Decimal?       @db.Decimal(12, 2)
+  payrollSettings    Json?
+  leaveSettings      Json?
+  lateMarkSettings   Json?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  leaveBalances     EmployeeLeaveBalance[]
+  leaveApplications LeaveApplication[]
+}
+
+model AttendanceRecord {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime         @db.Date
+  punchIn   DateTime?
+  punchOut  DateTime?
+  status    AttendanceStatus @default(PRESENT)
+  lateMinutes Int            @default(0)
+  isLateMark  Boolean        @default(false)
+  notes     String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([userId, date])
+}
+
+model PayrollRun {
+  id             String        @id @default(uuid())
+  periodStart    DateTime      @db.Date
+  periodEnd      DateTime      @db.Date
+  status         PayrollStatus @default(DRAFT)
+  notes          String?
+  journalEntryId String?       @unique
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+  createdById    String
+  createdBy      User          @relation(fields: [createdById], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  lines          PayrollLine[]
+}
+
+model PayrollLine {
+  id           String     @id @default(uuid())
+  payrollRunId String
+  payrollRun   PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  baseSalary   Decimal    @db.Decimal(12, 2)
+  deductions   Decimal    @default(0) @db.Decimal(12, 2)
+  bonuses      Decimal    @default(0) @db.Decimal(12, 2)
+  netPay       Decimal    @db.Decimal(12, 2)
+
+  @@unique([payrollRunId, userId])
+}
+
+model PerformanceReview {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation("Reviewee", fields: [userId], references: [id], onDelete: Cascade)
+  reviewerId String
+  reviewer   User     @relation("Reviewer", fields: [reviewerId], references: [id])
+  period     String
+  rating     Int
+  comments   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model EnrollmentInvite {
+  id          String    @id @default(uuid())
+  token       String    @unique
+  email       String?
+  name        String?
+  role        Role      @default(STAFF)
+  department  String?
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  payrollSettings  Json?
+  leaveSettings    Json?
+  lateMarkSettings Json?
+  employeePreset   Json?
+  createdAt   DateTime  @default(now())
+}
+
+model HrPolicySettings {
+  id                   String  @id @default("default")
+  payCycleDay          Int     @default(1)
+  pfEmployeePercent    Decimal @default(12) @db.Decimal(5, 2)
+  pfEmployerPercent    Decimal @default(12) @db.Decimal(5, 2)
+  esiEmployeePercent   Decimal @default(0.75) @db.Decimal(5, 2)
+  esiEmployerPercent   Decimal @default(3.25) @db.Decimal(5, 2)
+  professionalTax      Decimal @default(200) @db.Decimal(10, 2)
+  tdsApplicable        Boolean @default(false)
+  casualLeaveDays      Int     @default(12)
+  sickLeaveDays        Int     @default(10)
+  earnedLeaveDays      Int     @default(15)
+  carryForwardEnabled  Boolean @default(true)
+  maxCarryForwardDays  Int     @default(30)
+  officeStartTime      String  @default("09:30")
+  officeEndTime        String  @default("18:30")
+  gracePeriodMins      Int     @default(15)
+  lateMarkAfterMins    Int     @default(15)
+  halfDayAfterMins     Int     @default(120)
+  maxLateMarksPerMonth Int     @default(3)
+  lateDeductionPerMark Decimal @default(0) @db.Decimal(10, 2)
+  updatedAt            DateTime @updatedAt
+}
+
+model EmployeeLeaveBalance {
+  id                String          @id @default(uuid())
+  employeeProfileId String
+  employeeProfile   EmployeeProfile @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
+  year              Int
+  casualLeaveTotal  Int
+  casualLeaveUsed   Int             @default(0)
+  sickLeaveTotal    Int
+  sickLeaveUsed     Int             @default(0)
+  earnedLeaveTotal  Int
+  earnedLeaveUsed   Int             @default(0)
+
+  @@unique([employeeProfileId, year])
+}
+
+model LeaveApplication {
+  id                String                 @id @default(uuid())
+  employeeProfileId String
+  employeeProfile   EmployeeProfile        @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
+  leaveType         String
+  startDate         DateTime               @db.Date
+  endDate           DateTime               @db.Date
+  days              Decimal                @db.Decimal(4, 1)
+  reason            String?
+  status            LeaveApplicationStatus @default(PENDING)
+  approvedById      String?
+  approvedAt        DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@index([employeeProfileId, status])
+}
+
+model Service {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  steps       ServiceStep[]
+  deliveries  ServiceDelivery[]
+}
+
+model ServiceStep {
+  id          String  @id @default(uuid())
+  serviceId   String
+  service     Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  stepOrder   Int
+  name        String
+  description String?
+
+  deliveriesAtStep ServiceDelivery[]     @relation("CurrentDeliveryStep")
+  progressRecords  DeliveryStepProgress[]
+
+  @@unique([serviceId, stepOrder])
+}
+
+model Beneficiary {
+  id              String              @id @default(uuid())
+  beneficiaryCode String              @unique
+  /** Links enrollment to a project (local project id from proposals). */
+  projectId       String?
+  name            String
+  age             Int?
+  gender          String?
+  mobile          String?
+  alternateMobile String?
+  idDocumentType  IdDocumentType?
+  idDocumentNumber String?
+  pincode         String?
+  address         String?
+  category        BeneficiaryCategory @default(GENERAL)
+  monthlyIncome   Decimal?            @db.Decimal(12, 2)
+  familyMembers   Int?
+  location        String?
+  isUrgentCase    Boolean             @default(false)
+  isCaseStudy     Boolean             @default(false)
+  isRemoved       Boolean             @default(false)
+  removedAt       DateTime?
+  notes           String?
+  createdById     String
+  createdBy       User                @relation("BeneficiaryCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  deliveries      ServiceDelivery[]
+  followUps       BeneficiaryFollowUp[]
+  feedbacks       BeneficiaryFeedback[]
+
+  @@index([mobile])
+  @@index([beneficiaryCode])
+  @@index([projectId])
+  @@index([idDocumentNumber])
+  @@index([isRemoved])
+}
+
+model ServiceDelivery {
+  id             String                @id @default(uuid())
+  beneficiaryId  String
+  beneficiary    Beneficiary           @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  serviceId      String?
+  service        Service?              @relation(fields: [serviceId], references: [id])
+  status         ServiceDeliveryStatus @default(DATA_ENTERED)
+  /** Active service step — status label comes from step name when IN_PROGRESS */
+  currentStepId  String?
+  currentStep    ServiceStep?          @relation("CurrentDeliveryStep", fields: [currentStepId], references: [id])
+  recheckDueDate DateTime
+  recheckedAt    DateTime?
+  recheckedById  String?
+  recheckedBy    User?                 @relation("DeliveryRecheckedBy", fields: [recheckedById], references: [id])
+  enteredById    String
+  enteredBy      User                  @relation("DeliveryEnteredBy", fields: [enteredById], references: [id])
+  notes          String?
+  objectionActive Boolean              @default(false)
+  objectionNote  String?
+  objectionRaisedAt DateTime?
+  objectionRaisedById String?
+  objectionRaisedBy User?              @relation("DeliveryObjectionRaisedBy", fields: [objectionRaisedById], references: [id])
+  objectionClearedAt DateTime?
+  objectionClearedById String?
+  objectionClearedBy User?              @relation("DeliveryObjectionClearedBy", fields: [objectionClearedById], references: [id])
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  followUps      BeneficiaryFollowUp[]
+  stepProgress   DeliveryStepProgress[]
+
+  @@index([status, recheckDueDate])
+  @@index([beneficiaryId])
+  @@index([objectionActive])
+}
+
+model DeliveryStepProgress {
+  id            String          @id @default(uuid())
+  deliveryId    String
+  delivery      ServiceDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  stepId        String
+  step          ServiceStep     @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  completedAt   DateTime        @default(now())
+  completedById String
+  completedBy   User            @relation("StepCompletedBy", fields: [completedById], references: [id])
+  notes         String?
+
+  @@unique([deliveryId, stepId])
+}
+
+model BeneficiaryFollowUp {
+  id           String           @id @default(uuid())
+  beneficiaryId String
+  beneficiary  Beneficiary      @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  deliveryId   String?
+  delivery     ServiceDelivery? @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+  note         String
+  createdById  String
+  createdBy    User             @relation(fields: [createdById], references: [id])
+  createdAt    DateTime         @default(now())
+
+  @@index([beneficiaryId])
+}
+
+model ActivityRequest {
+  id            String                @id @default(uuid())
+  requestedById String
+  requestedBy   User                  @relation("ActivityRequests", fields: [requestedById], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  workType      CalendarWorkType      @default(PROJECT)
+  scheduledDate DateTime              @db.Date
+  endDate       DateTime?             @db.Date
+  projectId     String?
+  status        ActivityRequestStatus @default(PENDING)
+  reviewedById  String?
+  reviewedBy    User?                 @relation("ActivityReviews", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  reviewNotes   String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@index([scheduledDate, status])
+  @@index([requestedById])
+}
+
+model PublicHoliday {
+  id      String      @id @default(uuid())
+  date    DateTime    @db.Date
+  name    String
+  type    HolidayType @default(FESTIVAL)
+  year    Int
+  source  String
+  details String?
+
+  @@unique([date, name])
+  @@index([year])
+}
+
+model Expense {
+  id              String          @id @default(uuid())
+  submittedById   String
+  submittedBy     User            @relation("ExpensesSubmitted", fields: [submittedById], references: [id], onDelete: Cascade)
+  category        ExpenseCategory
+  paymentType     PaymentType
+  amount          Decimal         @db.Decimal(12, 2)
+  expenseDate     DateTime        @db.Date
+  description     String?
+  conveyanceFrom  String?
+  conveyanceTo    String?
+  conveyanceKm    Decimal?        @db.Decimal(8, 2)
+  status          ExpenseStatus   @default(PENDING)
+  reviewedById    String?
+  reviewedBy      User?           @relation("ExpensesReviewed", fields: [reviewedById], references: [id])
+  reviewedAt      DateTime?
+  reviewNotes     String?
+  projectId       String?
+  budgetHead      String?
+  fundType        String?
+  fundId          String?
+  fund            Fund?           @relation(fields: [fundId], references: [id])
+  financeProjectId String?
+  financeProject  FinanceProject? @relation(fields: [financeProjectId], references: [id])
+  journalEntryId  String?         @unique
+  journalEntry    JournalEntry?   @relation(fields: [journalEntryId], references: [id])
+  attachments     ExpenseAttachment[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([expenseDate, status])
+  @@index([submittedById])
+  @@index([category, status])
+  @@index([projectId])
+  @@index([fundId])
+  @@index([financeProjectId])
+}
+
+model ExpenseAttachment {
+  id         String   @id @default(uuid())
+  expenseId  String
+  expense    Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  fileName   String
+  mimeType   String
+  dataUrl    String   @db.Text
+  uploadedAt DateTime @default(now())
+}
+
+model Survey {
+  id                     String       @id @default(uuid())
+  title                  String
+  description            String?
+  status                 SurveyStatus @default(DRAFT)
+  projectId              String?
+  allowMultipleResponses Boolean      @default(false)
+  isAnonymous            Boolean      @default(false)
+  showProgressBar        Boolean      @default(true)
+  randomizeQuestions     Boolean      @default(false)
+  dueDate                DateTime?    @db.Date
+  publishedAt            DateTime?
+  closedAt               DateTime?
+  createdById            String
+  createdBy              User         @relation("SurveysCreatedBy", fields: [createdById], references: [id])
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+  questions              SurveyQuestion[]
+  responses              SurveyResponse[]
+
+  @@index([status, dueDate])
+  @@index([createdById])
+  @@index([projectId])
+}
+
+model SurveyQuestion {
+  id          String             @id @default(uuid())
+  surveyId    String
+  survey      Survey             @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  order       Int
+  type        SurveyQuestionType
+  label       String
+  description String?
+  required    Boolean            @default(false)
+  options     Json?
+  validation  Json?
+  answers     SurveyAnswer[]
+
+  @@unique([surveyId, order])
+  @@index([surveyId])
+}
+
+model SurveyResponse {
+  id            String               @id @default(uuid())
+  surveyId      String
+  survey        Survey               @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  submittedById String?
+  submittedBy   User?                @relation("SurveyResponsesSubmitted", fields: [submittedById], references: [id], onDelete: SetNull)
+  status        SurveyResponseStatus @default(IN_PROGRESS)
+  submittedAt   DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  answers       SurveyAnswer[]
+
+  @@index([surveyId, submittedById])
+  @@index([surveyId, status])
+}
+
+model SurveyAnswer {
+  id         String         @id @default(uuid())
+  responseId String
+  response   SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  questionId String
+  question   SurveyQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  value      Json
+
+  @@unique([responseId, questionId])
+  @@index([questionId])
+}
+
+model ComplianceItem {
+  id           String           @id @default(uuid())
+  type         ComplianceType
+  title        String
+  description  String?
+  dueDate      DateTime         @db.Date
+  status       ComplianceStatus @default(UPCOMING)
+  filedAt      DateTime?
+  reminderDays Int              @default(30)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  documents    VaultDocument[]
+
+  @@index([dueDate, status])
+}
+
+model VaultDocument {
+  id               String           @id @default(uuid())
+  title            String
+  category         VaultDocCategory @default(OTHER)
+  fileName         String
+  mimeType         String
+  dataUrl          String           @db.Text
+  projectId        String?
+  donorId          String?
+  complianceItemId String?
+  complianceItem   ComplianceItem?  @relation(fields: [complianceItemId], references: [id], onDelete: SetNull)
+  uploadedById     String
+  uploadedBy       User             @relation("VaultUploadedBy", fields: [uploadedById], references: [id])
+  createdAt        DateTime         @default(now())
+
+  @@index([projectId])
+  @@index([donorId])
+  @@index([complianceItemId])
+}
+
+model BeneficiaryFeedback {
+  id            String         @id @default(uuid())
+  beneficiaryId String
+  beneficiary   Beneficiary    @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  type          FeedbackType
+  rating        Int?
+  note          String
+  status        FeedbackStatus @default(OPEN)
+  resolution    String?
+  createdById   String
+  createdBy     User           @relation("FeedbackCreatedBy", fields: [createdById], references: [id])
+  resolvedAt    DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([beneficiaryId])
+  @@index([status])
+}
+
+model Donation {
+  id            String   @id @default(uuid())
+  donorId       String?
+  donorName     String
+  donorPan      String?
+  amount        Decimal  @db.Decimal(12, 2)
+  donationDate  DateTime @db.Date
+  receiptNumber String   @unique
+  paymentMode   String?
+  purpose       String?
+  projectId     String?
+  fundId        String?
+  fund          Fund?    @relation(fields: [fundId], references: [id])
+  financeProjectId String?
+  financeProject FinanceProject? @relation(fields: [financeProjectId], references: [id])
+  is80GEligible Boolean  @default(true)
+  journalEntryId String? @unique
+  journalEntry  JournalEntry? @relation(fields: [journalEntryId], references: [id])
+  recordedById  String
+  recordedBy    User     @relation("DonationsRecordedBy", fields: [recordedById], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@index([donationDate])
+  @@index([donorId])
+  @@index([fundId])
+}
+
+model Volunteer {
+  id        String          @id @default(uuid())
+  name      String
+  phone     String?
+  email     String?
+  skills    String?
+  location  String?
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  hours     VolunteerHour[]
+
+  @@index([isActive])
+}
+
+model VolunteerHour {
+  id             String    @id @default(uuid())
+  volunteerId    String
+  volunteer      Volunteer @relation(fields: [volunteerId], references: [id], onDelete: Cascade)
+  hours          Decimal   @db.Decimal(5, 2)
+  activityDate   DateTime  @db.Date
+  activityTaskId String?
+  projectId      String?
+  notes          String?
+  recordedById   String
+  recordedBy     User      @relation("VolunteerHoursRecordedBy", fields: [recordedById], references: [id])
+  createdAt      DateTime  @default(now())
+
+  @@index([volunteerId])
+  @@index([activityDate])
+}
+
+model NotificationPreference {
+  id           String  @id @default(uuid())
+  userId       String  @unique
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailEnabled Boolean @default(true)
+  smsEnabled   Boolean @default(false)
+  notifyPhone  String?
+}
+
+model InAppNotification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  href      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+model TeamMessage {
+  id        String   @id @default(uuid())
+  senderId  String
+  sender    User     @relation("TeamMessagesSent", fields: [senderId], references: [id])
+  body      String   @db.Text
+  audience  String   @default("ALL")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model OrgSettings {
+  id             String   @id @default("default")
+  orgName        String   @default("SVITECH Foundation")
+  orgAddress     String?
+  orgPan         String?
+  org80G         String?
+  org12A         String?
+  orgFcra        String?
+  orgEmail       String?
+  orgPhone       String?
+  smtpHost       String?
+  smtpPort       Int?
+  smtpUser       String?
+  smsProvider    String?
+  smsApiKey      String?
+  whatsappApiKey String?
+  razorpayKeyId  String?
+  updatedAt      DateTime @updatedAt
+}
+
+model DonorPipelineEntry {
+  id             String             @id @default(uuid())
+  donorId        String
+  donorName      String
+  stage          DonorPipelineStage @default(PROSPECT)
+  nextFollowUp   DateTime?          @db.Date
+  proposalSentAt DateTime?
+  grantedAt      DateTime?
+  reportDueDate  DateTime?          @db.Date
+  amountPledged  Decimal?           @db.Decimal(12, 2)
+  projectId      String?
+  notes          String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([stage])
+  @@index([donorId])
+}
+
+model PartnerOrganization {
+  id                 String   @id @default(uuid())
+  name               String
+  contactPerson      String?
+  email              String?
+  phone              String?
+  panOrRegNo         String?
+  dueDiligenceStatus String   @default("PENDING")
+  has80G             Boolean  @default(false)
+  hasFcra            Boolean  @default(false)
+  hasDarpan          Boolean  @default(false)
+  notes              String?
+  projectIds         Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model AssetItem {
+  id           String   @id @default(uuid())
+  name         String
+  category     String
+  serialNumber String?
+  projectId    String?
+  location     String?
+  value        Decimal? @db.Decimal(12, 2)
+  status       String   @default("ACTIVE")
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model SafeguardingIncident {
+  id           String   @id @default(uuid())
+  projectId    String?
+  title        String
+  description  String   @db.Text
+  severity     String   @default("MEDIUM")
+  status       String   @default("OPEN")
+  reportedById String
+  reportedBy   User     @relation("SafeguardingReportedBy", fields: [reportedById], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model NotificationOutbox {
+  id        String    @id @default(uuid())
+  userId    String?
+  channel   String
+  recipient String
+  subject   String?
+  body      String    @db.Text
+  status    String    @default("PENDING")
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([status])
+}
+
+// ── Accounting & Finance ─────────────────────────────────────────────────────
+
+model Fund {
+  id           String          @id @default(uuid())
+  code         String          @unique
+  name         String
+  restriction  FundRestriction @default(UNRESTRICTED)
+  isFcra       Boolean         @default(false)
+  isActive     Boolean         @default(true)
+  description  String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  journalLines JournalLine[]
+  expenses     Expense[]
+  donations    Donation[]
+  budgetLines  ProjectBudgetLine[]
+  vendorBills  VendorBill[]
+}
+
+model FinanceProject {
+  id           String              @id @default(uuid())
+  code         String              @unique
+  name         String
+  description  String?
+  fundingType  String?
+  startDate    DateTime?           @db.Date
+  endDate      DateTime?           @db.Date
+  totalBudget  Decimal?            @db.Decimal(14, 2)
+  isActive     Boolean             @default(true)
+  legacyProjectId String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  budgetLines  ProjectBudgetLine[]
+  expenses     Expense[]
+  donations    Donation[]
+  journalLines JournalLine[]
+  vendorBills  VendorBill[]
+
+  @@index([isActive])
+}
+
+model ProjectBudgetLine {
+  id               String         @id @default(uuid())
+  financeProjectId String
+  financeProject   FinanceProject @relation(fields: [financeProjectId], references: [id], onDelete: Cascade)
+  fundId           String?
+  fund             Fund?          @relation(fields: [fundId], references: [id])
+  budgetHead       String
+  amount           Decimal        @db.Decimal(14, 2)
+  notes            String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([financeProjectId])
+}
+
+model LedgerAccount {
+  id              String          @id @default(uuid())
+  code            String          @unique
+  name            String
+  category        AccountCategory
+  expenseFunction ExpenseFunction @default(NONE)
+  isFcra          Boolean         @default(false)
+  isSystem        Boolean         @default(false)
+  isActive        Boolean         @default(true)
+  parentCode      String?
+  description     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  journalLines    JournalLine[]
+  vendorBills     VendorBill[]
+  bankAccounts    BankAccount[]
+
+  @@index([category])
+}
+
+model FinancialYear {
+  id             String            @id @default(uuid())
+  label          String            @unique
+  startDate      DateTime          @db.Date
+  endDate        DateTime          @db.Date
+  isCurrent      Boolean           @default(false)
+  voucherCounter Int               @default(0)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  periods        FinancialPeriod[]
+  journalEntries JournalEntry[]
+
+  @@index([isCurrent])
+}
+
+model FinancialPeriod {
+  id              String                @id @default(uuid())
+  financialYearId String
+  financialYear   FinancialYear         @relation(fields: [financialYearId], references: [id], onDelete: Cascade)
+  month           Int
+  year            Int
+  status          FinancialPeriodStatus @default(OPEN)
+  closedAt        DateTime?
+  closedById      String?
+  closedBy        User?                 @relation("PeriodsClosedBy", fields: [closedById], references: [id])
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([financialYearId, month, year])
+  @@index([status])
+}
+
+model JournalEntry {
+  id              String             @id @default(uuid())
+  voucherNumber   String
+  entryDate       DateTime           @db.Date
+  financialYearId String
+  financialYear   FinancialYear      @relation(fields: [financialYearId], references: [id])
+  description     String?
+  sourceType      JournalSourceType    @default(MANUAL)
+  sourceId        String?
+  status          JournalEntryStatus   @default(POSTED)
+  createdById     String
+  createdBy       User               @relation("JournalEntriesCreated", fields: [createdById], references: [id])
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  lines           JournalLine[]
+  expense         Expense?
+  donation        Donation?
+  payrollRun      PayrollRun?
+  vendorBill      VendorBill?
+  vendorPayment   VendorPayment?
+
+  @@unique([financialYearId, voucherNumber])
+  @@index([entryDate])
+  @@index([sourceType, sourceId])
+}
+
+model JournalLine {
+  id               String         @id @default(uuid())
+  journalEntryId   String
+  journalEntry     JournalEntry   @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  ledgerAccountId  String
+  ledgerAccount    LedgerAccount  @relation(fields: [ledgerAccountId], references: [id])
+  fundId           String?
+  fund             Fund?          @relation(fields: [fundId], references: [id])
+  financeProjectId String?
+  financeProject   FinanceProject? @relation(fields: [financeProjectId], references: [id])
+  debit            Decimal        @default(0) @db.Decimal(14, 2)
+  credit           Decimal        @default(0) @db.Decimal(14, 2)
+  narration        String?
+
+  @@index([journalEntryId])
+  @@index([ledgerAccountId])
+  @@index([fundId])
+}
+
+model Vendor {
+  id            String          @id @default(uuid())
+  name          String
+  pan           String?
+  gstin         String?
+  contactPerson String?
+  email         String?
+  phone         String?
+  address       String?
+  tdsSection    String?
+  tdsRate       Decimal?        @db.Decimal(5, 2)
+  isActive      Boolean         @default(true)
+  notes         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  bills         VendorBill[]
+  payments      VendorPayment[]
+
+  @@index([isActive])
+}
+
+model VendorBill {
+  id               String           @id @default(uuid())
+  vendorId         String
+  vendor           Vendor           @relation(fields: [vendorId], references: [id])
+  billNumber       String
+  billDate         DateTime         @db.Date
+  dueDate          DateTime?        @db.Date
+  amount           Decimal          @db.Decimal(14, 2)
+  tdsAmount        Decimal          @default(0) @db.Decimal(14, 2)
+  description      String?
+  status           VendorBillStatus @default(DRAFT)
+  ledgerAccountId  String?
+  ledgerAccount    LedgerAccount?   @relation(fields: [ledgerAccountId], references: [id])
+  fundId           String?
+  fund             Fund?            @relation(fields: [fundId], references: [id])
+  financeProjectId String?
+  financeProject   FinanceProject?  @relation(fields: [financeProjectId], references: [id])
+  journalEntryId   String?          @unique
+  journalEntry     JournalEntry?    @relation(fields: [journalEntryId], references: [id])
+  createdById      String
+  createdBy        User             @relation("VendorBillsCreated", fields: [createdById], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  payments         VendorPayment[]
+
+  @@index([vendorId, status])
+  @@index([billDate])
+}
+
+model VendorPayment {
+  id              String        @id @default(uuid())
+  vendorId        String
+  vendor          Vendor        @relation(fields: [vendorId], references: [id])
+  vendorBillId    String?
+  vendorBill      VendorBill?   @relation(fields: [vendorBillId], references: [id])
+  paymentDate     DateTime      @db.Date
+  amount          Decimal       @db.Decimal(14, 2)
+  paymentMode     PaymentType   @default(BANK_TRANSFER)
+  bankAccountId   String?
+  bankAccount     BankAccount?  @relation(fields: [bankAccountId], references: [id])
+  reference       String?
+  journalEntryId  String?       @unique
+  journalEntry    JournalEntry? @relation(fields: [journalEntryId], references: [id])
+  recordedById    String
+  recordedBy      User          @relation("VendorPaymentsRecorded", fields: [recordedById], references: [id])
+  createdAt       DateTime      @default(now())
+
+  @@index([vendorId])
+  @@index([paymentDate])
+}
+
+model BankAccount {
+  id              String            @id @default(uuid())
+  name            String
+  accountNumber   String?
+  ifsc            String?
+  bankName        String?
+  accountType     BankAccountType   @default(DOMESTIC)
+  ledgerAccountId String
+  ledgerAccount   LedgerAccount     @relation(fields: [ledgerAccountId], references: [id])
+  openingBalance  Decimal           @default(0) @db.Decimal(14, 2)
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  statementLines  BankStatementLine[]
+  payments        VendorPayment[]
+  reconciliations BankReconciliation[]
+
+  @@index([accountType])
+}
+
+model BankStatementLine {
+  id              String    @id @default(uuid())
+  bankAccountId   String
+  bankAccount     BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  transactionDate DateTime  @db.Date
+  description     String?
+  reference       String?
+  debit           Decimal   @default(0) @db.Decimal(14, 2)
+  credit          Decimal   @default(0) @db.Decimal(14, 2)
+  isReconciled    Boolean   @default(false)
+  reconciledAt    DateTime?
+  journalEntryId  String?
+  createdAt       DateTime  @default(now())
+
+  @@index([bankAccountId, transactionDate])
+  @@index([isReconciled])
+}
+
+model BankReconciliation {
+  id              String      @id @default(uuid())
+  bankAccountId   String
+  bankAccount     BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  periodEnd       DateTime    @db.Date
+  statementBalance Decimal    @db.Decimal(14, 2)
+  bookBalance     Decimal     @db.Decimal(14, 2)
+  difference      Decimal     @db.Decimal(14, 2)
+  notes           String?
+  completedAt     DateTime    @default(now())
+  createdAt       DateTime    @default(now())
+
+  @@index([bankAccountId])
+}
+
+model FinanceAuditLog {
+  id         String   @id @default(uuid())
+  action     String
+  entityType String
+  entityId   String?
+  details    Json?
+  userId     String
+  user       User     @relation("FinanceAuditBy", fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
