@@ -1,21 +1,52 @@
 type ErrorWithCode = Error & { code?: string };
 
+type ParsedPostgresUrl = {
+  user: string;
+  password: string;
+  hostname: string;
+  port: string;
+};
+
 function getActiveDatabaseUrl(): string {
   return process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL ?? "";
 }
 
+/** Parse postgres URI; uses last @ so passwords may contain @ when URL-encoded. */
+function parsePostgresConnectionString(connectionString: string): ParsedPostgresUrl | null {
+  const trimmed = connectionString.trim().replace(/^["']|["']$/g, "");
+  const schemeMatch = trimmed.match(/^postgres(ql)?:\/\//i);
+  if (!schemeMatch) return null;
+
+  const rest = trimmed.slice(schemeMatch[0].length);
+  const atIndex = rest.lastIndexOf("@");
+  if (atIndex <= 0) return null;
+
+  const credentials = rest.slice(0, atIndex);
+  const hostAndPath = rest.slice(atIndex + 1);
+  const colonIndex = credentials.indexOf(":");
+  if (colonIndex <= 0) return null;
+
+  const hostMatch = hostAndPath.match(/^([^:/?#]+)(?::(\d+))?/);
+  if (!hostMatch) return null;
+
+  return {
+    user: credentials.slice(0, colonIndex),
+    password: credentials.slice(colonIndex + 1),
+    hostname: hostMatch[1],
+    port: hostMatch[2] ?? "5432",
+  };
+}
+
+function isSupabaseDatabaseHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host.endsWith(".pooler.supabase.com") || /^db\.[a-z0-9]+\.supabase\.co$/i.test(host);
+}
+
 /** Safe host/port hint for error messages (no credentials). */
 export function getDatabaseConnectionHint(): string | null {
-  const connectionString = getActiveDatabaseUrl();
-  if (!connectionString) return null;
-
-  try {
-    const url = new URL(connectionString.replace(/^postgres(ql)?:\/\//, "http://"));
-    const port = url.port || "5432";
-    return `${url.hostname}:${port}`;
-  } catch {
-    return "invalid connection string";
-  }
+  const parsed = parsePostgresConnectionString(getActiveDatabaseUrl());
+  if (!parsed) return null;
+  return `${parsed.hostname}:${parsed.port}`;
 }
 
 function getConnectionStringIssues(connectionString: string): string[] {
@@ -29,32 +60,41 @@ function getConnectionStringIssues(connectionString: string): string[] {
     );
   }
 
-  if (/pooler\.supabase\.com/i.test(connectionString) && /:5432[/?]/.test(connectionString)) {
-    const userMatch = connectionString.match(/^postgres(ql)?:\/\/([^:]+):/i);
-    const user = userMatch?.[2] ?? "";
-    if (!/^postgres\.[a-z0-9]+$/i.test(user)) {
+  const parsed = parsePostgresConnectionString(connectionString);
+  if (!parsed) {
+    issues.push(
+      "DATABASE_URL could not be parsed. Use session pooler: postgresql://postgres.[ref]:[PASSWORD]@aws-0-[region].pooler.supabase.com:5432/postgres — URL-encode @ # % in the password, or reset the DB password to letters and numbers only."
+    );
+    return issues;
+  }
+
+  if (/pooler\.supabase\.com/i.test(parsed.hostname) && parsed.port === "5432") {
+    if (!/^postgres\.[a-z0-9]+$/i.test(parsed.user)) {
       issues.push(
         "Session pooler URL must use user postgres.[project-ref] (from Supabase Connect → Pooler), not postgres alone."
       );
     }
   }
 
+  let decodedPassword = parsed.password;
   try {
-    const url = new URL(connectionString.replace(/^postgres(ql)?:\/\//, "http://"));
-    const rawPassword = connectionString.match(/^postgres(ql)?:\/\/[^:]+:([^@]+)@/i)?.[2];
-    if (rawPassword && /[#?&\s]/.test(decodeURIComponent(rawPassword)) && rawPassword === decodeURIComponent(rawPassword)) {
-      issues.push(
-        "Database password contains special characters that must be URL-encoded in DATABASE_URL (e.g. @ → %40, # → %23, % → %25)."
-      );
-    }
-    if (url.hostname.endsWith(".supabase.co") && !url.hostname.startsWith("db.")) {
-      issues.push(
-        `Host "${url.hostname}" does not look like a Supabase direct DB host. Expected db.[project-ref].supabase.co.`
-      );
-    }
+    decodedPassword = decodeURIComponent(parsed.password);
   } catch {
     issues.push(
-      "DATABASE_URL could not be parsed. Check the format: postgresql://postgres:[PASSWORD]@db.[ref].supabase.co:5432/postgres"
+      "DATABASE_URL has invalid percent-encoding in the password. Use @ → %40, # → %23, or reset the Supabase database password to letters and numbers only."
+    );
+    return issues;
+  }
+
+  if (/[@#?&\s]/.test(decodedPassword) && parsed.password === decodedPassword) {
+    issues.push(
+      "Database password contains @ or # but is not URL-encoded in DATABASE_URL. Encode @ → %40, # → %23, or reset the Supabase password to letters and numbers only (recommended on Hostinger)."
+    );
+  }
+
+  if (parsed.hostname.endsWith(".supabase.co") && !isSupabaseDatabaseHost(parsed.hostname)) {
+    issues.push(
+      `Host "${parsed.hostname}" is not a recognized Supabase database host. Use db.[ref].supabase.co or [region].pooler.supabase.com.`
     );
   }
 
@@ -143,12 +183,6 @@ export function getEnvSetupIssues(): string[] {
 
   const connectionString = getActiveDatabaseUrl();
   issues.push(...getConnectionStringIssues(connectionString));
-
-  if (connectionString.includes("@") && /[#?]/.test(connectionString.split("@")[0] ?? "")) {
-    issues.push(
-      "DATABASE_URL password looks unencoded (@ or # before the host). URL-encode the password (@ → %40, # → %23)."
-    );
-  }
 
   return issues;
 }
