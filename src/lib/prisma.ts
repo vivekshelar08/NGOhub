@@ -97,6 +97,11 @@ function getPrismaClient(): PrismaClient {
   return globalForPrisma.prisma;
 }
 
-export const prisma = getPrismaClient();
-
-globalForPrisma.prisma = prisma;
+/** Lazy proxy so missing DATABASE_URL does not crash process startup. */
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, property, receiver) {
+    const client = getPrismaClient();
+    const value = Reflect.get(client, property, receiver);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});

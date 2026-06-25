@@ -105,15 +105,19 @@ URL-encode special characters in the database password (`@` → `%40`, `#` → `
 
 ## Deploy on Hostinger (Node.js)
 
-1. Push this repo to GitHub (see below)
-2. Hostinger → **Websites** → **Add Website** → **Node.js**
-3. Connect your GitHub repo
-4. Build settings:
-   - **Build command:** `npm run build`
-   - **Start command:** `npm run start`
-   - **Node version:** 20+
-5. Add all environment variables from the production setup step
-6. Deploy and open `/api/health` — `database.ok` and `status` should be `"ok"`
+1. Push this repo to GitHub
+2. Hostinger → **Websites** → **Add Website** → **Node.js** → import `vivekshelar08/NGOhub`
+3. Use these **exact** deploy settings:
+
+| Setting | Value |
+|---------|--------|
+| Install command | `npm ci` |
+| Build command | `npm run build` |
+| Start command | `npm run start` |
+| Node.js version | **20** |
+
+4. Add **all** environment variables below (required for **build and runtime** on Hostinger)
+5. Deploy, then open **Runtime logs** — you should see `Starting Next.js on 0.0.0.0:XXXX`
 
 ## API endpoints
 
