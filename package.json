@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "prisma generate && next dev",
     "build": "prisma generate && next build",
-    "start": "node server.js",
+    "start": "next start -H 0.0.0.0",
+    "start:server": "node scripts/hostinger-server.js",
     "lint": "eslint .",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
