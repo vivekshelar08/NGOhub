@@ -16,9 +16,20 @@ function isPoolerConnectionString(connectionString: string) {
   return /:6543[/?]/.test(connectionString) || /pooler\.supabase\.com/i.test(connectionString);
 }
 
+function isLocalDatabase(connectionString: string) {
+  try {
+    const url = new URL(connectionString.replace(/^postgres(ql)?:\/\//, "http://"));
+    const host = url.hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1";
+  } catch {
+    return /@(localhost|127\.0\.0\.1)(:\d+)?/i.test(connectionString);
+  }
+}
+
 function needsSsl(connectionString: string) {
   if (/sslmode=(require|verify-full|prefer)/i.test(connectionString)) return true;
-  return /supabase\.com|neon\.tech|render\.com|railway\.app|hostingersite\.com/i.test(connectionString);
+  if (isLocalDatabase(connectionString)) return false;
+  return true;
 }
 
 function getPool() {

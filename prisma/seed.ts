@@ -10,7 +10,16 @@ if (!connectionString) {
   throw new Error("DATABASE_URL or DIRECT_DATABASE_URL is not set");
 }
 
-const pool = new Pool({ connectionString });
+function needsSsl(url: string) {
+  if (/sslmode=(require|verify-full|prefer)/i.test(url)) return true;
+  if (/@(localhost|127\.0\.0\.1)(:\d+)?/i.test(url)) return false;
+  return true;
+}
+
+const pool = new Pool({
+  connectionString,
+  ssl: needsSsl(connectionString) ? { rejectUnauthorized: false } : undefined,
+});
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 

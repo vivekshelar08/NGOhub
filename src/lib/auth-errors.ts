@@ -22,7 +22,7 @@ export function formatAuthError(error: unknown): string {
   }
 
   if (code === "P1001" || message.includes("Can't reach database server")) {
-    return "Cannot reach database. Check DATABASE_URL and allow external connections in your database host.";
+    return "Cannot reach database. Use the Supabase direct URL (port 5432, host ends in .supabase.co), URL-encode special characters in the password, and in Supabase go to Project Settings → Database → Network → allow all IPs. Then redeploy Hostinger.";
   }
   if (code === "P1000" || message.includes("Authentication failed")) {
     return "Database authentication failed. Check the username and password in DATABASE_URL.";
