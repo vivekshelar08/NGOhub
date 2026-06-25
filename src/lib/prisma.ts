@@ -12,8 +12,12 @@ function getConnectionString() {
   return process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL;
 }
 
+function isTransactionPooler(connectionString: string) {
+  return /:6543[/?]/.test(connectionString);
+}
+
 function isPoolerConnectionString(connectionString: string) {
-  return /:6543[/?]/.test(connectionString) || /pooler\.supabase\.com/i.test(connectionString);
+  return isTransactionPooler(connectionString) || /pooler\.supabase\.com/i.test(connectionString);
 }
 
 function isLocalDatabase(connectionString: string) {
@@ -39,9 +43,13 @@ function getPool() {
       throw new Error("DATABASE_URL or DIRECT_DATABASE_URL is not set");
     }
 
-    if (isPoolerConnectionString(connectionString)) {
+    if (isTransactionPooler(connectionString)) {
       console.warn(
-        "Prisma is using a pooler URL. For Hostinger/Supabase, set DIRECT_DATABASE_URL to the direct connection on port 5432."
+        "Prisma is using transaction pooler (port 6543). Use session pooler on port 5432 or direct connection instead."
+      );
+    } else if (/pooler\.supabase\.com/i.test(connectionString)) {
+      console.warn(
+        "Prisma is using Supavisor session pooler (IPv4). Use this when direct db.*.supabase.co is unreachable from your host."
       );
     }
 

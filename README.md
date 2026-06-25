@@ -2,14 +2,16 @@
 
 NGO Management Platform — built module by module.
 
-## Tab 1: Auth + Setup (current)
+## Stack
 
-- Next.js 14 (App Router) + TypeScript + Tailwind
-- PostgreSQL + Prisma
-- JWT auth (httpOnly cookies) with refresh tokens
-- RBAC for 5 roles: Admin, Manager, HR, Coordinator, Staff
+- Next.js 16 (App Router) + TypeScript + Tailwind
+- PostgreSQL via **Supabase** (production) or local Postgres (development)
+- Prisma ORM with `@prisma/adapter-pg`
+- Custom JWT auth (httpOnly cookies) with refresh tokens
+- Optional Supabase JS client for storage / realtime
+- RBAC for roles: Admin, Manager, Accountant, HR, Coordinator, Staff
 
-## Quick start
+## Quick start (local)
 
 ### 1. Start the database
 
@@ -19,11 +21,11 @@ NGO Management Platform — built module by module.
 npx prisma dev
 ```
 
-Keep this running in a terminal. It updates `DATABASE_URL` in `.env` automatically.
+Keep this running. It updates `DATABASE_URL` in `.env` automatically.
 
 **Option B — Your own PostgreSQL:**
 
-Set `DATABASE_URL` in `.env` to your connection string.
+Copy `.env.example` to `.env` and set `DATABASE_URL` and `DIRECT_DATABASE_URL`.
 
 ### 2. Apply schema and seed
 
@@ -50,6 +52,68 @@ Open [http://localhost:3000](http://localhost:3000)
 | Coordinator | coordinator@ngohub.local | Coord@123 |
 | Staff | staff@ngohub.local | Staff@123 |
 
+## Production (Supabase)
+
+### 1. Create a Supabase project
+
+1. [supabase.com](https://supabase.com) → New project
+2. **Database → Network** → allow all IPs (`0.0.0.0/0`) so your host can connect
+3. **Connect → Pooler → Session mode** (port **5432**) — copy the URI  
+   User must be `postgres.[project-ref]`, not `postgres` alone
+4. **Project Settings → API** — copy `URL` and `anon` key for optional JS client
+
+### 2. Push schema and seed (from your machine)
+
+```bash
+npm run setup:production-db -- "postgresql://postgres.[ref]:[PASSWORD]@aws-0-[region].pooler.supabase.com:5432/postgres"
+```
+
+This validates the connection, runs `prisma db push`, seeds demo users, and prints production env vars (with fresh JWT secrets).
+
+Or print env vars only:
+
+```bash
+npm run print:production-env -- "<session-pooler-uri>" "https://your-domain.com"
+```
+
+### 3. Verify connectivity
+
+```bash
+# Postgres (set DATABASE_URL in .env first)
+npm run check:database
+
+# Supabase REST API (optional)
+npm run check:supabase
+```
+
+Health endpoint after deploy: `GET /api/health`
+
+### Required environment variables
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | Supabase session pooler URI (port 5432) |
+| `DIRECT_DATABASE_URL` | Same as `DATABASE_URL` |
+| `JWT_ACCESS_SECRET` | Random secret (32+ bytes) |
+| `JWT_REFRESH_SECRET` | Random secret (32+ bytes) |
+| `NEXT_PUBLIC_APP_URL` | Public URL, e.g. `https://your-domain.com` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Optional — `https://[ref].supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Optional — from Supabase API settings |
+
+URL-encode special characters in the database password (`@` → `%40`, `#` → `%23`).
+
+## Deploy on Hostinger (Node.js)
+
+1. Push this repo to GitHub (see below)
+2. Hostinger → **Websites** → **Add Website** → **Node.js**
+3. Connect your GitHub repo
+4. Build settings:
+   - **Build command:** `npm run build`
+   - **Start command:** `npm run start` (or `npm run start:server`)
+   - **Node version:** 20+
+5. Add all environment variables from the production setup step
+6. Deploy and open `/api/health` — `database.ok` and `status` should be `"ok"`
+
 ## API endpoints
 
 | Method | Path | Description |
@@ -58,6 +122,7 @@ Open [http://localhost:3000](http://localhost:3000)
 | POST | `/api/auth/logout` | Sign out |
 | POST | `/api/auth/refresh` | Rotate session |
 | GET | `/api/auth/me` | Current user |
+| GET | `/api/health` | Database + Supabase health |
 | GET | `/api/users` | List users (Admin) |
 | POST | `/api/users` | Create user (Admin) |
 

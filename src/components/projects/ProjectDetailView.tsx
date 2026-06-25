@@ -93,7 +93,6 @@ export function ProjectDetailView({
       }
     } else {
       router.push(basePath);
-      router.refresh();
     }
   }
 
@@ -102,7 +101,6 @@ export function ProjectDetailView({
     if (!window.confirm(`Delete "${project.title}"? This cannot be undone.`)) return;
     deleteProject(project.id);
     router.push(basePath);
-    router.refresh();
   }
 
   if (!project) {

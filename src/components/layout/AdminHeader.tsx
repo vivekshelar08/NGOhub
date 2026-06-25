@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ChevronDown, LogOut, Search, User } from "lucide-react";
 import { Role } from "@/generated/prisma/enums";
 import { Badge } from "@/components/ui/Badge";
@@ -13,7 +12,6 @@ interface AdminHeaderProps {
 }
 
 export function AdminHeader({ user }: AdminHeaderProps) {
-  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -30,8 +28,7 @@ export function AdminHeader({ user }: AdminHeaderProps) {
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
+    window.location.assign("/login");
   }
 
   const initials = user.name

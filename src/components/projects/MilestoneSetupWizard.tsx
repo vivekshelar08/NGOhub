@@ -353,7 +353,6 @@ export function MilestoneSetupWizard({
     try {
       upsertProject({ ...project, setup: completedSetup });
       router.push(`${basePath}/${project.id}`);
-      router.refresh();
     } catch {
       setError("Could not complete setup.");
     }

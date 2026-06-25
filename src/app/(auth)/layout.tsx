@@ -1,6 +1,8 @@
 import { AppLogo } from "@/components/layout/AppLogo";
 import { LoginHero } from "@/components/auth/LoginHero";
 
+export const dynamic = "force-dynamic";
+
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]">

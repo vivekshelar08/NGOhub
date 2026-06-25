@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -50,13 +50,11 @@ interface SidebarProps {
 
 export function Sidebar({ user, badges = {}, mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const visible = getNavItemsForRole(user.role);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
+    window.location.assign("/login");
   }
 
   const activeHref = getActiveNavHref(pathname, visible);

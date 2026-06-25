@@ -9,7 +9,7 @@
     "dev": "prisma generate && next dev",
     "build": "prisma generate && next build",
     "start": "next start -H 0.0.0.0",
-    "start:server": "node scripts/hostinger-server.js",
+    "start:server": "node scripts/production-server.js",
     "lint": "eslint .",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
@@ -18,7 +18,11 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:clean": "tsx scripts/clean-demo-data.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "check:database": "node scripts/check-database.js",
+    "setup:production-db": "node scripts/setup-production-db.js",
+    "print:production-env": "node scripts/print-production-env.js",
+    "check:supabase": "node scripts/check-supabase.js"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -26,6 +30,7 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@supabase/supabase-js": "^2.0.0",
     "bcryptjs": "^3.0.3",
     "docx": "^9.7.1",
     "dotenv": "^17.4.2",
