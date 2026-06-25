@@ -16,7 +16,7 @@ import { loginSchema } from "./validators";
 
 export { ACCESS_COOKIE, REFRESH_COOKIE } from "./auth-constants";
 
-function useSecureCookies() {
+function shouldUseSecureCookies() {
   if (process.env.COOKIE_SECURE === "true") return true;
   if (process.env.COOKIE_SECURE === "false") return false;
   return process.env.NEXT_PUBLIC_APP_URL?.startsWith("https://") ?? process.env.NODE_ENV === "production";
@@ -25,7 +25,7 @@ function useSecureCookies() {
 function authCookieOptions(maxAge: number) {
   return {
     httpOnly: true,
-    secure: useSecureCookies(),
+    secure: shouldUseSecureCookies(),
     sameSite: "lax" as const,
     path: "/",
     maxAge,
