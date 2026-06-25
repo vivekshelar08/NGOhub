@@ -116,8 +116,14 @@ URL-encode special characters in the database password (`@` → `%40`, `#` → `
 | Start command | `npm run start` |
 | Node.js version | **20** |
 
-4. Add **all** environment variables below (required for **build and runtime** on Hostinger)
-5. Deploy, then open **Runtime logs** — you should see `Starting Next.js on 0.0.0.0:XXXX`
+**If you get 503**, change Start command to:
+
+```bash
+next start -H 0.0.0.0 -p $PORT
+```
+
+4. Add **all** environment variables (required for build and runtime)
+5. Deploy → **Runtime logs** should show Next.js listening; then test `/login`
 
 ## API endpoints
 
