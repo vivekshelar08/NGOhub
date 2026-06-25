@@ -7,6 +7,7 @@ import { Input, Label } from "@/components/ui/Input";
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
 import { formatRole } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { loginAction } from "./actions";
 
 const highlights = [
   { icon: Users, label: "Beneficiaries" },
@@ -36,21 +37,9 @@ export default function LoginPage() {
   async function signIn(loginEmail: string, loginPassword: string) {
     setError("");
 
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: loginEmail, password: loginPassword }),
-    });
-
-    if (!res.ok) {
-      let message = "Login failed";
-      try {
-        const data = (await res.json()) as { error?: string };
-        message = data.error ?? message;
-      } catch {
-        message = "Login failed — server returned an unexpected response.";
-      }
-      throw new Error(message);
+    const result = await loginAction(loginEmail, loginPassword);
+    if ("error" in result) {
+      throw new Error(result.error);
     }
 
     window.location.assign("/dashboard");

@@ -1,36 +1,18 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
-import { createSession, setAuthCookies, toAuthUser } from "@/lib/auth";
-import { loginSchema } from "@/lib/validators";
+import { authenticateWithPassword, setAuthCookies } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const parsed = loginSchema.safeParse(body);
+    const { email, password } = body as { email?: string; password?: string };
 
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+    const result = await authenticateWithPassword(email ?? "", password ?? "");
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
     }
 
-    const { email, password } = parsed.data;
-
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-
-    if (!user || user.status !== "ACTIVE") {
-      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
-    }
-
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
-    }
-
-    const authUser = toAuthUser(user);
-    const { accessToken, refreshToken } = await createSession(authUser);
-
-    const response = NextResponse.json({ user: authUser });
-    setAuthCookies(response, accessToken, refreshToken);
+    const response = NextResponse.json({ user: result.user });
+    setAuthCookies(response, result.accessToken, result.refreshToken);
     return response;
   } catch (error) {
     console.error("Login error:", error);

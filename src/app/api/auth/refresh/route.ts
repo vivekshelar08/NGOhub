@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { signAccessToken, verifyRefreshToken } from "@/lib/auth-jwt";
-import { REFRESH_COOKIE, createSession, setAuthCookies, toAuthUser } from "@/lib/auth";
+import { REFRESH_COOKIE, createSession, setAccessCookie, setAuthCookies, toAuthUser } from "@/lib/auth";
 import { ACCESS_COOKIE } from "@/lib/auth-constants";
 
 export async function POST() {
@@ -69,13 +69,7 @@ export async function GET() {
   const accessToken = await signAccessToken(authUser);
 
   const response = NextResponse.json({ user: authUser });
-  response.cookies.set(ACCESS_COOKIE, accessToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 15 * 60,
-  });
+  setAccessCookie(response, accessToken);
 
   return response;
 }

@@ -12,6 +12,11 @@ function getConnectionString() {
   return process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL;
 }
 
+function needsSsl(connectionString: string) {
+  if (/sslmode=(require|verify-full|prefer)/i.test(connectionString)) return true;
+  return /supabase\.com|neon\.tech|render\.com|railway\.app/i.test(connectionString);
+}
+
 function getPool() {
   if (!globalForPrisma.pool) {
     const connectionString = getConnectionString();
@@ -21,9 +26,7 @@ function getPool() {
 
     globalForPrisma.pool = new Pool({
       connectionString,
-      ssl: connectionString.includes("sslmode=require")
-        ? { rejectUnauthorized: false }
-        : undefined,
+      ssl: needsSsl(connectionString) ? { rejectUnauthorized: false } : undefined,
     });
   }
   return globalForPrisma.pool;

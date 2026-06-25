@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
+import bcrypt from "bcryptjs";
 import { Role } from "@/generated/prisma/enums";
 import { prisma } from "./prisma";
 import type { AuthUser } from "@/types/auth";
@@ -11,30 +12,69 @@ import {
   verifyAccessToken,
   verifyRefreshToken,
 } from "./auth-jwt";
+import { loginSchema } from "./validators";
 
 export { ACCESS_COOKIE, REFRESH_COOKIE } from "./auth-constants";
 
-export function setAuthCookies(response: NextResponse, accessToken: string, refreshToken: string) {
-  response.cookies.set(ACCESS_COOKIE, accessToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 15 * 60,
-  });
+function useSecureCookies() {
+  if (process.env.COOKIE_SECURE === "true") return true;
+  if (process.env.COOKIE_SECURE === "false") return false;
+  return process.env.NEXT_PUBLIC_APP_URL?.startsWith("https://") ?? process.env.NODE_ENV === "production";
+}
 
-  response.cookies.set(REFRESH_COOKIE, refreshToken, {
+function authCookieOptions(maxAge: number) {
+  return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: useSecureCookies(),
+    sameSite: "lax" as const,
     path: "/",
-    maxAge: 7 * 24 * 60 * 60,
-  });
+    maxAge,
+  };
+}
+
+export function setAuthCookies(response: NextResponse, accessToken: string, refreshToken: string) {
+  response.cookies.set(ACCESS_COOKIE, accessToken, authCookieOptions(15 * 60));
+  response.cookies.set(REFRESH_COOKIE, refreshToken, authCookieOptions(7 * 24 * 60 * 60));
+}
+
+export async function setAuthCookiesInStore(accessToken: string, refreshToken: string) {
+  const cookieStore = await cookies();
+  cookieStore.set(ACCESS_COOKIE, accessToken, authCookieOptions(15 * 60));
+  cookieStore.set(REFRESH_COOKIE, refreshToken, authCookieOptions(7 * 24 * 60 * 60));
+}
+
+export function setAccessCookie(response: NextResponse, accessToken: string) {
+  response.cookies.set(ACCESS_COOKIE, accessToken, authCookieOptions(15 * 60));
 }
 
 export function clearAuthCookies(response: NextResponse) {
   response.cookies.set(ACCESS_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
   response.cookies.set(REFRESH_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
+}
+
+export type LoginResult =
+  | { ok: true; user: AuthUser; accessToken: string; refreshToken: string }
+  | { ok: false; error: string; status: number };
+
+export async function authenticateWithPassword(email: string, password: string): Promise<LoginResult> {
+  const parsed = loginSchema.safeParse({ email, password });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input", status: 400 };
+  }
+
+  const user = await prisma.user.findUnique({ where: { email: parsed.data.email.toLowerCase() } });
+  if (!user || user.status !== "ACTIVE") {
+    return { ok: false, error: "Invalid email or password", status: 401 };
+  }
+
+  const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
+  if (!valid) {
+    return { ok: false, error: "Invalid email or password", status: 401 };
+  }
+
+  const authUser = toAuthUser(user);
+  const { accessToken, refreshToken } = await createSession(authUser);
+  return { ok: true, user: authUser, accessToken, refreshToken };
 }
 
 export async function createSession(user: AuthUser) {
