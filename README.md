@@ -116,13 +116,21 @@ URL-encode special characters in the database password (`@` → `%40`, `#` → `
 | Start command | `npm run start` |
 | Node.js version | **20** |
 
-**If you get 503**, change Start command to:
+`npm run start` runs `scripts/start.mjs`, which binds Next.js to `0.0.0.0` and Hostinger's `PORT`.
+
+**If you still get 503**, set Start command to:
 
 ```bash
 next start -H 0.0.0.0 -p $PORT
 ```
 
 4. Add **all** environment variables (required for build and runtime)
+
+After the first deploy with password reset, run once from your machine (with production `DATABASE_URL`):
+
+```bash
+npx prisma db push
+```
 5. Deploy → **Runtime logs** should show `Starting Next.js on 0.0.0.0:XXXX`
 
 **Intermittent 503?** Hostinger may stop idle Node apps. Use a free uptime monitor to ping `https://svitech.in/api/live` every 5 minutes. `/api/health` reports DB status but always returns HTTP 200 so the platform does not kill the app when Supabase is slow.

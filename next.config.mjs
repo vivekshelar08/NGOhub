@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ["nodemailer"],
   // New build ID each deploy so stale HTML cannot reference old action/chunk IDs.
   generateBuildId: async () => {
     return process.env.BUILD_ID ?? `build-${Date.now()}`;
@@ -8,6 +9,14 @@ const nextConfig = {
     return [
       {
         source: "/login/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }],
+      },
+      {
+        source: "/forgot-password/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }],
+      },
+      {
+        source: "/reset-password/:path*",
         headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }],
       },
       {

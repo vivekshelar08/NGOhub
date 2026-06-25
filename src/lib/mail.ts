@@ -1,15 +1,8 @@
-import nodemailer from "nodemailer";
-import type { Transporter } from "nodemailer";
+import type { SendEmailInput, SmtpConfig } from "@/lib/mail-types";
 import { prisma } from "@/lib/prisma";
 import { mergeOrgSettings } from "@/lib/orgSettings";
 
-export interface SmtpConfig {
-  host: string;
-  port: number;
-  user: string;
-  password: string;
-  from: string;
-}
+export type { SendEmailInput, SmtpConfig } from "@/lib/mail-types";
 
 /** Resolve SMTP settings: env vars take precedence, then org settings. */
 export async function getSmtpConfig(): Promise<SmtpConfig | null> {
@@ -27,10 +20,20 @@ export async function getSmtpConfig(): Promise<SmtpConfig | null> {
   return { host, port, user, password, from };
 }
 
-let cachedTransport: Transporter | null = null;
+type MailTransport = {
+  sendMail: (mail: {
+    from: string;
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+  }) => Promise<unknown>;
+};
+
+let cachedTransport: MailTransport | null = null;
 let cachedKey = "";
 
-async function getTransport(): Promise<Transporter> {
+async function getTransport(): Promise<MailTransport> {
   const config = await getSmtpConfig();
   if (!config) {
     throw new Error(
@@ -41,7 +44,8 @@ async function getTransport(): Promise<Transporter> {
   const key = `${config.host}:${config.port}:${config.user}`;
   if (cachedTransport && cachedKey === key) return cachedTransport;
 
-  cachedTransport = nodemailer.createTransport({
+  const nodemailer = await import("nodemailer");
+  cachedTransport = nodemailer.default.createTransport({
     host: config.host,
     port: config.port,
     secure: config.port === 465,
@@ -49,13 +53,6 @@ async function getTransport(): Promise<Transporter> {
   });
   cachedKey = key;
   return cachedTransport;
-}
-
-export interface SendEmailInput {
-  to: string;
-  subject: string;
-  text: string;
-  html?: string;
 }
 
 export async function sendEmail(input: SendEmailInput): Promise<void> {
