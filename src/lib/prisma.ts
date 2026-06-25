@@ -56,8 +56,13 @@ function getPool() {
     globalForPrisma.pool = new Pool({
       connectionString,
       ssl: needsSsl(connectionString) ? { rejectUnauthorized: false } : undefined,
-      max: 5,
+      max: isPoolerConnectionString(connectionString) ? 2 : 5,
+      idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000,
+    });
+
+    globalForPrisma.pool.on("error", (error) => {
+      console.error("Postgres pool error:", error.message);
     });
   }
   return globalForPrisma.pool;
@@ -97,6 +102,10 @@ function getPrismaClient(): PrismaClient {
   return globalForPrisma.prisma;
 }
 
-export const prisma = getPrismaClient();
-
-globalForPrisma.prisma = prisma;
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, property, receiver) {
+    const client = getPrismaClient();
+    const value = Reflect.get(client, property, receiver);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});

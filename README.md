@@ -123,7 +123,9 @@ next start -H 0.0.0.0 -p $PORT
 ```
 
 4. Add **all** environment variables (required for build and runtime)
-5. Deploy → **Runtime logs** should show Next.js listening; then test `/login`
+5. Deploy → **Runtime logs** should show `Starting Next.js on 0.0.0.0:XXXX`
+
+**Intermittent 503?** Hostinger may stop idle Node apps. Use a free uptime monitor to ping `https://svitech.in/api/live` every 5 minutes. `/api/health` reports DB status but always returns HTTP 200 so the platform does not kill the app when Supabase is slow.
 
 ## API endpoints
 

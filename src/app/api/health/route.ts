@@ -29,14 +29,15 @@ export async function GET() {
 
   const supabase = await checkSupabaseHealth();
 
-  const healthy = database.ok && (!supabase.configured || supabase.ok);
+  const healthy = database.ok;
 
+  // Always HTTP 200 — Hostinger treats 503 as "app down" and shows its error page.
   return NextResponse.json(
     {
       status: healthy ? "ok" : "degraded",
       database,
       supabase,
     },
-    { status: healthy ? 200 : 503 }
+    { status: 200 }
   );
 }
