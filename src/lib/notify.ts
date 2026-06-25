@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
+import { sendEmail } from "@/lib/mail";
+
 export type NotifyChannel = "email" | "sms" | "whatsapp";
 
 export interface QueueNotificationInput {
@@ -72,9 +74,19 @@ async function deliverNotification(
       if (!res.ok) throw new Error("Email webhook failed");
       return;
     }
-    // Dev fallback: log only — configure NOTIFY_EMAIL_WEBHOOK or SMTP in org settings
-    console.info(`[notify:email] to=${recipient} subject=${subject} body=${body.slice(0, 120)}`);
-    return;
+
+    try {
+      await sendEmail({
+        to: recipient,
+        subject: subject ?? "NGO Hub",
+        text: body,
+      });
+      return;
+    } catch {
+      // Dev fallback when SMTP is not configured
+      console.info(`[notify:email] to=${recipient} subject=${subject} body=${body.slice(0, 120)}`);
+      return;
+    }
   }
 
   if (channel === "sms" || channel === "whatsapp") {

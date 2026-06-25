@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, Heart, Shield, Users } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -102,8 +103,10 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <Label htmlFor="password">Password</Label>
-            <div className="relative mt-1">
+            <Label htmlFor="password" className="mb-0">
+              Password
+            </Label>
+            <div className="relative mt-1.5">
               <Input
                 id="password"
                 type={showPassword ? "text" : "password"}
@@ -123,6 +126,14 @@ export default function LoginPage() {
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+            <p className="mt-2 text-right">
+              <Link
+                href="/forgot-password"
+                className="text-sm font-semibold text-brand-teal hover:text-brand-teal-dark hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </p>
           </div>
           {setupIssues.length > 0 && (
             <div

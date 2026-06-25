@@ -10,7 +10,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith("/login")) {
+  if (pathname.startsWith("/login") || pathname.startsWith("/forgot-password") || pathname.startsWith("/reset-password")) {
     const token = request.cookies.get(ACCESS_COOKIE)?.value;
     if (token && (await verifyAccessTokenEdge(token))) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
@@ -39,5 +39,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/login", "/enroll/:path*", "/dashboard/:path*", "/admin/:path*"],
+  matcher: ["/", "/login", "/forgot-password", "/reset-password", "/enroll/:path*", "/dashboard/:path*", "/admin/:path*"],
 };

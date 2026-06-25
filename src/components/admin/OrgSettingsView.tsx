@@ -115,9 +115,51 @@ export function OrgSettingsView() {
         </Card>
 
         <Card>
+          <CardTitle className="text-base">Email (SMTP)</CardTitle>
+          <CardDescription className="mb-4">
+            Hostinger: host <code className="text-xs">smtp.hostinger.com</code>, port{" "}
+            <code className="text-xs">465</code>. Set <code className="text-xs">SMTP_PASSWORD</code> in
+            server environment (not stored here).
+          </CardDescription>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label>SMTP host</Label>
+              <Input
+                value={settings.smtpHost ?? ""}
+                onChange={(e) => setSettings({ ...settings, smtpHost: e.target.value })}
+                placeholder="smtp.hostinger.com"
+              />
+            </div>
+            <div>
+              <Label>SMTP port</Label>
+              <Input
+                type="number"
+                value={settings.smtpPort ?? ""}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    smtpPort: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+                placeholder="465"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>SMTP user (email address)</Label>
+              <Input
+                type="email"
+                value={settings.smtpUser ?? ""}
+                onChange={(e) => setSettings({ ...settings, smtpUser: e.target.value })}
+                placeholder="ngo@yourdomain.com"
+              />
+            </div>
+          </div>
+        </Card>
+
+        <Card>
           <CardTitle className="text-base">Integrations (optional)</CardTitle>
           <CardDescription className="mb-4">
-            Add API keys when ready. SMS/WhatsApp use NOTIFY_SMS_API_KEY env; email uses NOTIFY_EMAIL_WEBHOOK or org email.
+            SMS/WhatsApp use NOTIFY_SMS_API_KEY env. Email uses SMTP above or NOTIFY_EMAIL_WEBHOOK.
           </CardDescription>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
