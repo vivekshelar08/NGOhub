@@ -97,6 +97,7 @@ Health endpoint after deploy: `GET /api/health`
 | `JWT_ACCESS_SECRET` | Random secret (32+ bytes) |
 | `JWT_REFRESH_SECRET` | Random secret (32+ bytes) |
 | `NEXT_PUBLIC_APP_URL` | Public URL, e.g. `https://your-domain.com` |
+| `NODE_ENV` | Set to `production` on Hostinger |
 | `NEXT_PUBLIC_SUPABASE_URL` | Optional — `https://[ref].supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Optional — from Supabase API settings |
 
@@ -109,7 +110,7 @@ URL-encode special characters in the database password (`@` → `%40`, `#` → `
 3. Connect your GitHub repo
 4. Build settings:
    - **Build command:** `npm run build`
-   - **Start command:** `npm run start` (uses root `server.js`, binds `0.0.0.0` + `PORT`)
+   - **Start command:** `npm run start`
    - **Node version:** 20+
 5. Add all environment variables from the production setup step
 6. Deploy and open `/api/health` — `database.ok` and `status` should be `"ok"`
