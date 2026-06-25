@@ -4,9 +4,6 @@ import { useEffect, useState } from "react";
 import { Eye, EyeOff, Heart, Shield, Users } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
-import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
-import { formatRole } from "@/lib/utils";
-import { cn } from "@/lib/utils";
 import type { AuthUser } from "@/types/auth";
 import type { SetupCheckResult } from "@/lib/setup-check";
 
@@ -16,17 +13,6 @@ const highlights = [
   { icon: Shield, label: "Secure access" },
 ];
 
-const ROLE_CHIP: Record<string, string> = {
-  ADMIN: "bg-violet-100 text-violet-800 ring-violet-200",
-  MANAGER: "bg-blue-100 text-blue-800 ring-blue-200",
-  ACCOUNTANT: "bg-purple-100 text-purple-800 ring-purple-200",
-  HR: "bg-emerald-100 text-emerald-800 ring-emerald-200",
-  COORDINATOR: "bg-teal-100 text-teal-800 ring-teal-200",
-  STAFF: "bg-slate-100 text-slate-700 ring-slate-200",
-};
-
-const showDemoLogins = true;
-
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,7 +20,6 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [setupIssues, setSetupIssues] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [demoLoading, setDemoLoading] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/login/setup-check", { credentials: "same-origin" })
@@ -80,23 +65,6 @@ export default function LoginPage() {
       setLoading(false);
     }
   }
-
-  async function handleDemoLogin(demoEmail: string, demoPassword: string) {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-    setDemoLoading(demoEmail);
-    setError("");
-
-    try {
-      await signIn(demoEmail, demoPassword);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
-    } finally {
-      setDemoLoading(null);
-    }
-  }
-
-  const busy = loading || demoLoading !== null;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 shadow-xl shadow-slate-200/60 backdrop-blur-sm">
@@ -177,49 +145,10 @@ export default function LoginPage() {
               {error}
             </p>
           )}
-          <Button type="submit" className="w-full" size="lg" disabled={busy}>
+          <Button type="submit" className="w-full" size="lg" disabled={loading}>
             {loading ? "Signing in..." : "Sign in to NGO Hub"}
           </Button>
         </form>
-
-        {showDemoLogins && (
-          <div className="mt-6 border-t border-slate-100 pt-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Demo logins — one click
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Run <code className="rounded bg-slate-100 px-1 py-0.5">npm run db:seed</code> if accounts are missing.
-            </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {DEMO_ACCOUNTS.map((account) => (
-                <button
-                  key={account.email}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => handleDemoLogin(account.email, account.password)}
-                  className={cn(
-                    "flex flex-col items-start rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-left transition-colors",
-                    "hover:border-brand-teal/40 hover:bg-brand-mist/30 disabled:opacity-60"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1",
-                      ROLE_CHIP[account.role]
-                    )}
-                  >
-                    {formatRole(account.role)}
-                  </span>
-                  <span className="mt-1.5 text-xs font-medium text-slate-800">{account.name}</span>
-                  <span className="text-[11px] text-slate-500">{account.email}</span>
-                  {demoLoading === account.email && (
-                    <span className="mt-1 text-[11px] text-brand-teal">Signing in…</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
