@@ -2,6 +2,7 @@
 const nextConfig = {
   experimental: {
     serverActions: {
+      allowedOrigins: ["svitech.in", "www.svitech.in"],
       bodySizeLimit: "10mb",
     },
   },

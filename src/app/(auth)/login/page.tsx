@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeOff, Heart, Shield, Users } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
 import { formatRole } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { loginAction } from "./actions";
+import { checkSetupAction } from "./actions";
+import type { AuthUser } from "@/types/auth";
 
 const highlights = [
   { icon: Users, label: "Beneficiaries" },
@@ -31,15 +32,31 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [setupIssues, setSetupIssues] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    checkSetupAction().then((result) => {
+      if (!result.ok) {
+        setSetupIssues(result.issues);
+      }
+    });
+  }, []);
 
   async function signIn(loginEmail: string, loginPassword: string) {
     setError("");
 
-    const result = await loginAction(loginEmail, loginPassword);
-    if ("error" in result) {
-      throw new Error(result.error);
+    const res = await fetch("/login/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      credentials: "same-origin",
+    });
+
+    const data = (await res.json()) as { user?: AuthUser; error?: string };
+    if (!res.ok || data.error) {
+      throw new Error(data.error ?? "Login failed");
     }
 
     window.location.assign("/dashboard");
@@ -134,6 +151,19 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+          {setupIssues.length > 0 && (
+            <div
+              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900"
+              role="status"
+            >
+              <p className="font-medium">Server setup needed</p>
+              <ul className="mt-1 list-disc pl-4">
+                {setupIssues.map((issue) => (
+                  <li key={issue}>{issue}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           {error && (
             <p
               className="rounded-lg border border-red-100 bg-red-50 px-3 py-2.5 text-sm text-red-600"
