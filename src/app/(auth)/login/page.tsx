@@ -7,8 +7,8 @@ import { Input, Label } from "@/components/ui/Input";
 import { DEMO_ACCOUNTS } from "@/lib/demo-accounts";
 import { formatRole } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { checkSetupAction } from "./actions";
 import type { AuthUser } from "@/types/auth";
+import type { SetupCheckResult } from "@/lib/setup-check";
 
 const highlights = [
   { icon: Users, label: "Beneficiaries" },
@@ -37,11 +37,16 @@ export default function LoginPage() {
   const [demoLoading, setDemoLoading] = useState<string | null>(null);
 
   useEffect(() => {
-    checkSetupAction().then((result) => {
-      if (!result.ok) {
-        setSetupIssues(result.issues);
-      }
-    });
+    fetch("/login/setup-check", { credentials: "same-origin" })
+      .then((res) => res.json() as Promise<SetupCheckResult>)
+      .then((result) => {
+        if (!result.ok) {
+          setSetupIssues(result.issues);
+        }
+      })
+      .catch(() => {
+        // Setup check is advisory; login errors still surface on submit.
+      });
   }, []);
 
   async function signIn(loginEmail: string, loginPassword: string) {
