@@ -48,7 +48,7 @@ export async function checkSupabaseHealth(): Promise<{
   const { url, anonKey } = getSupabaseConfig();
 
   try {
-    const res = await fetch(`${url}/rest/v1/`, {
+    const res = await fetch(`${url}/auth/v1/health`, {
       headers: { apikey: anonKey },
       signal: AbortSignal.timeout(5000),
     });

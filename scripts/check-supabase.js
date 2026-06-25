@@ -20,7 +20,7 @@ if (!url || !anonKey) {
 }
 
 async function main() {
-  const res = await fetch(`${url}/rest/v1/`, {
+  const res = await fetch(`${url}/auth/v1/health`, {
     headers: { apikey: anonKey },
     signal: AbortSignal.timeout(10000),
   });
