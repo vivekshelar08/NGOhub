@@ -27,12 +27,17 @@ export async function PATCH(_request: Request, { params }: RouteParams) {
 
   if (nextStatus === "PAID") {
     const { ensureAccountingSetup, postPayrollJournal } = await import("@/lib/accounting");
+    let journalWarning: string | undefined;
     try {
       await ensureAccountingSetup(prisma);
-      await postPayrollJournal(prisma, id, currentUser.id);
+      const entry = await postPayrollJournal(prisma, id, currentUser.id);
+      if (!entry) journalWarning = "Payroll marked paid but journal was not posted.";
     } catch (error) {
+      journalWarning =
+        error instanceof Error ? `GL posting failed: ${error.message}` : "GL posting failed.";
       console.error("Payroll journal posting failed:", error);
     }
+    return NextResponse.json({ run: updated, journalWarning });
   }
 
   return NextResponse.json({ run: updated });

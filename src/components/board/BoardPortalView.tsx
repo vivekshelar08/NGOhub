@@ -12,6 +12,14 @@ interface BoardStats {
   complianceDue: number;
   openIncidents: number;
   activeVolunteers: number;
+  finance?: {
+    totalAssets: number;
+    totalLiabilities: number;
+    netSurplus: number;
+    income: number;
+    expenses: number;
+    fundWise: Array<{ code: string; name: string; balance: number }>;
+  };
 }
 
 export function BoardPortalView() {
@@ -19,12 +27,13 @@ export function BoardPortalView() {
 
   useEffect(() => {
     async function load() {
-      const [benRes, donRes, compRes, safeRes, volRes] = await Promise.all([
+      const [benRes, donRes, compRes, safeRes, volRes, finRes] = await Promise.all([
         fetch("/api/beneficiaries?countOnly=1"),
         fetch("/api/donations"),
         fetch("/api/compliance"),
         fetch("/api/safeguarding"),
         fetch("/api/volunteers"),
+        fetch("/api/finance/board-summary"),
       ]);
 
       const beneficiaries = benRes.ok ? (await benRes.json()).count ?? 0 : 0;
@@ -32,6 +41,9 @@ export function BoardPortalView() {
       const compliance = compRes.ok ? (await compRes.json()).items ?? [] : [];
       const incidents = safeRes.ok ? (await safeRes.json()).incidents ?? [] : [];
       const volunteers = volRes.ok ? (await volRes.json()).volunteers ?? [] : [];
+      const finData = finRes.ok ? await finRes.json() : null;
+      const finance = finData?.summary ?? null;
+      const fundWise = finData?.fundWise ?? [];
 
       setStats({
         beneficiaries,
@@ -39,6 +51,16 @@ export function BoardPortalView() {
         complianceDue: compliance.filter((c: { status: string }) => c.status === "DUE" || c.status === "OVERDUE").length,
         openIncidents: incidents.filter((i: { status: string }) => i.status === "OPEN").length,
         activeVolunteers: volunteers.filter((v: { isActive: boolean }) => v.isActive).length,
+        finance: finance
+          ? {
+              totalAssets: finance.totalAssets,
+              totalLiabilities: finance.totalLiabilities,
+              netSurplus: finance.netSurplus,
+              income: finance.income,
+              expenses: finance.expenses,
+              fundWise,
+            }
+          : undefined,
       });
     }
     load();
@@ -83,6 +105,41 @@ export function BoardPortalView() {
               <p className="text-sm text-amber-900">
                 {stats.openIncidents} open safeguarding incident(s) require board attention.
               </p>
+            </Card>
+          )}
+
+          {stats.finance && (
+            <Card className="mb-6">
+              <CardTitle className="text-base">Financial position (read-only)</CardTitle>
+              <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <CardDescription>Total assets</CardDescription>
+                  <p className="mt-1 text-lg font-semibold">₹{stats.finance.totalAssets.toLocaleString("en-IN")}</p>
+                </div>
+                <div>
+                  <CardDescription>Total liabilities</CardDescription>
+                  <p className="mt-1 text-lg font-semibold">₹{stats.finance.totalLiabilities.toLocaleString("en-IN")}</p>
+                </div>
+                <div>
+                  <CardDescription>Income (YTD)</CardDescription>
+                  <p className="mt-1 text-lg font-semibold">₹{stats.finance.income.toLocaleString("en-IN")}</p>
+                </div>
+                <div>
+                  <CardDescription>Net surplus</CardDescription>
+                  <p className={`mt-1 text-lg font-semibold ${stats.finance.netSurplus >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    ₹{stats.finance.netSurplus.toLocaleString("en-IN")}
+                  </p>
+                </div>
+              </div>
+              {stats.finance.fundWise.length > 0 && (
+                <ul className="mt-4 space-y-1 text-sm text-slate-600">
+                  {stats.finance.fundWise.map((f) => (
+                    <li key={f.code}>
+                      {f.code} — {f.name}: ₹{f.balance.toLocaleString("en-IN")}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </Card>
           )}
 

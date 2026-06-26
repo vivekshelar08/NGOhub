@@ -11,6 +11,7 @@ import { EXPENSE_CATEGORY_LABELS, PAYMENT_TYPE_LABELS } from "@/lib/finance-util
 import { loadProjects, ProjectProposal } from "@/lib/projects";
 import { ExpenseCategory, PaymentType } from "@/generated/prisma/enums";
 import { enqueueOffline } from "@/lib/offlineQueue";
+import { useFinanceMeta } from "@/hooks/useFinanceMeta";
 
 interface AddExpenseFormProps {
   onSuccess: (msg: string) => void;
@@ -18,6 +19,7 @@ interface AddExpenseFormProps {
 }
 
 export function AddExpenseForm({ onSuccess, onError }: AddExpenseFormProps) {
+  const { meta } = useFinanceMeta();
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState<FileAttachment[]>([]);
   const [pdfs, setPdfs] = useState<FileAttachment[]>([]);
@@ -33,6 +35,8 @@ export function AddExpenseForm({ onSuccess, onError }: AddExpenseFormProps) {
     projectId: "",
     budgetHead: "",
     fundType: "",
+    fundId: "",
+    financeProjectId: "",
   });
   const [projects, setProjects] = useState<ProjectProposal[]>([]);
 
@@ -40,11 +44,19 @@ export function AddExpenseForm({ onSuccess, onError }: AddExpenseFormProps) {
     setProjects(loadProjects().filter((p) => p.status === "APPROVED"));
   }, []);
 
+  const selectedFinanceProject = useMemo(
+    () => meta?.financeProjects.find((p) => p.id === form.financeProjectId),
+    [meta, form.financeProjectId]
+  );
+
   const budgetHeads = useMemo(() => {
+    if (selectedFinanceProject?.budgetLines.length) {
+      return selectedFinanceProject.budgetLines.map((l) => l.budgetHead).filter(Boolean);
+    }
     const p = projects.find((x) => x.id === form.projectId);
     if (!p) return [];
     return (p.budget ?? []).map((c) => c.title).filter(Boolean);
-  }, [projects, form.projectId]);
+  }, [projects, form.projectId, selectedFinanceProject]);
 
   async function submitExpense(body: Record<string, unknown>) {
     const res = await fetch("/api/finance/expenses", {
@@ -87,6 +99,8 @@ export function AddExpenseForm({ onSuccess, onError }: AddExpenseFormProps) {
       projectId: form.projectId || undefined,
       budgetHead: form.budgetHead || undefined,
       fundType: form.fundType || undefined,
+      fundId: form.fundId || undefined,
+      financeProjectId: form.financeProjectId || undefined,
       attachments,
     };
 
@@ -127,6 +141,8 @@ export function AddExpenseForm({ onSuccess, onError }: AddExpenseFormProps) {
       projectId: "",
       budgetHead: "",
       fundType: "",
+      fundId: "",
+      financeProjectId: "",
     });
     setPhotos([]);
     setPdfs([]);
@@ -197,15 +213,46 @@ export function AddExpenseForm({ onSuccess, onError }: AddExpenseFormProps) {
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
-            Link to project (optional)
+            Link to project & fund (optional)
             <HelpTip helpKey="budget_head" />
           </p>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
-              <Label>Project</Label>
+              <Label>Fund</Label>
+              <Select
+                value={form.fundId}
+                onChange={(e) => setForm({ ...form, fundId: e.target.value })}
+              >
+                <option value="">None</option>
+                {meta?.funds.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.code} — {f.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label>Finance project</Label>
+              <Select
+                value={form.financeProjectId}
+                onChange={(e) =>
+                  setForm({ ...form, financeProjectId: e.target.value, budgetHead: "" })
+                }
+              >
+                <option value="">None</option>
+                {meta?.financeProjects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.code} — {p.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label>Legacy project</Label>
               <Select
                 value={form.projectId}
                 onChange={(e) => setForm({ ...form, projectId: e.target.value, budgetHead: "" })}
+                disabled={!!form.financeProjectId}
               >
                 <option value="">None</option>
                 {projects.map((p) => (
@@ -218,7 +265,7 @@ export function AddExpenseForm({ onSuccess, onError }: AddExpenseFormProps) {
               <Select
                 value={form.budgetHead}
                 onChange={(e) => setForm({ ...form, budgetHead: e.target.value })}
-                disabled={!form.projectId}
+                disabled={!form.projectId && !form.financeProjectId}
               >
                 <option value="">None</option>
                 {budgetHeads.map((h) => (
@@ -227,7 +274,7 @@ export function AddExpenseForm({ onSuccess, onError }: AddExpenseFormProps) {
               </Select>
             </div>
             <div>
-              <Label>Fund type</Label>
+              <Label>Fund type (legacy)</Label>
               <Select value={form.fundType} onChange={(e) => setForm({ ...form, fundType: e.target.value })}>
                 <option value="">Not specified</option>
                 <option value="CSR">CSR</option>

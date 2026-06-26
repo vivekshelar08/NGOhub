@@ -1,10 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
+import { Label, Select } from "@/components/ui/Input";
 import { formatCurrency } from "@/lib/finance-utils";
+
+function getIndianFYOptions(count = 3): string[] {
+  const now = new Date();
+  const month = now.getMonth();
+  const startYear = month >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return Array.from({ length: count }, (_, i) => {
+    const y = startYear - i;
+    return `${y}-${String(y + 1).slice(-2)}`;
+  });
+}
 
 const EXPORTS = [
   {
@@ -25,12 +36,16 @@ const EXPORTS = [
 ] as const;
 
 export function ComplianceExportsPanel() {
+  const fyOptions = useMemo(() => getIndianFYOptions(5), []);
+  const [fy, setFy] = useState(fyOptions[0] ?? "");
   const [loading, setLoading] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ type: string; data: unknown } | null>(null);
 
   async function loadExport(type: string) {
     setLoading(type);
-    const res = await fetch(`/api/finance/compliance-exports?type=${type}`);
+    const params = new URLSearchParams({ type });
+    if (fy) params.set("fy", fy);
+    const res = await fetch(`/api/finance/compliance-exports?${params}`);
     setLoading(null);
     if (res.ok) {
       const data = await res.json();
@@ -51,6 +66,17 @@ export function ComplianceExportsPanel() {
 
   return (
     <div className="space-y-4">
+      <div className="max-w-xs">
+        <Label>Financial year</Label>
+        <Select value={fy} onChange={(e) => setFy(e.target.value)} className="mt-1">
+          {fyOptions.map((opt) => (
+            <option key={opt} value={opt}>
+              FY {opt}
+            </option>
+          ))}
+        </Select>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-3">
         {EXPORTS.map((e) => (
           <Card key={e.id}>

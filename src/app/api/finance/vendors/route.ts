@@ -57,3 +57,28 @@ export async function POST(request: Request) {
   const vendor = await prisma.vendor.create({ data: parsed.data });
   return NextResponse.json({ vendor }, { status: 201 });
 }
+
+const patchSchema = createSchema.partial().extend({
+  id: z.string(),
+  isActive: z.boolean().optional(),
+});
+
+export async function PATCH(request: Request) {
+  const user = await getCurrentUser();
+  if (!user || !hasFeature(user.role, "finance.vendors")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const parsed = patchSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid vendor" }, { status: 400 });
+  }
+
+  const { id, ...data } = parsed.data;
+  const vendor = await prisma.vendor.update({
+    where: { id },
+    data,
+  });
+
+  return NextResponse.json({ vendor });
+}

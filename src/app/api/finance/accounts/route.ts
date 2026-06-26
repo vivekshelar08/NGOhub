@@ -69,3 +69,40 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ account }, { status: 201 });
 }
+
+const patchSchema = z.object({
+  id: z.string(),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  isActive: z.boolean().optional(),
+  expenseFunction: z.enum(["PROGRAM", "ADMINISTRATIVE", "FUNDRAISING", "NONE"]).optional(),
+});
+
+export async function PATCH(request: Request) {
+  const user = await getCurrentUser();
+  if (!user || !hasFeature(user.role, "finance.accounting")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const parsed = patchSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid account update" }, { status: 400 });
+  }
+
+  const existing = await prisma.ledgerAccount.findUnique({ where: { id: parsed.data.id } });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (existing.isSystem && parsed.data.isActive === false) {
+    return NextResponse.json({ error: "Cannot deactivate system accounts" }, { status: 400 });
+  }
+
+  const account = await prisma.ledgerAccount.update({
+    where: { id: parsed.data.id },
+    data: {
+      name: parsed.data.name,
+      description: parsed.data.description,
+      isActive: parsed.data.isActive,
+      expenseFunction: parsed.data.expenseFunction,
+    },
+  });
+  return NextResponse.json({ account });
+}

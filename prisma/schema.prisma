@@ -1296,6 +1296,7 @@ model VendorBill {
   dueDate          DateTime?        @db.Date
   amount           Decimal          @db.Decimal(14, 2)
   tdsAmount        Decimal          @default(0) @db.Decimal(14, 2)
+  gstAmount        Decimal          @default(0) @db.Decimal(14, 2)
   description      String?
   status           VendorBillStatus @default(DRAFT)
   ledgerAccountId  String?

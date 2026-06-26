@@ -22,6 +22,10 @@ export default async function FinancePage() {
       canPeriodClose={hasFeature(user.role, "finance.period_close")}
       canCompliance={hasFeature(user.role, "finance.compliance")}
       canBudget={hasFeature(user.role, "finance.budget")}
+      canDonations={hasFeature(user.role, "finance.donations")}
+      canInterFund={hasFeature(user.role, "finance.inter_fund")}
+      canBudgetActual={hasFeature(user.role, "finance.budget_actual")}
+      isAdmin={user.role === "ADMIN" || hasFeature(user.role, "admin.access")}
     />
   );
 }

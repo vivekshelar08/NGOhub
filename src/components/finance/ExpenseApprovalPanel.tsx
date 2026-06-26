@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
+import { Label, Textarea } from "@/components/ui/Input";
 import { ExpenseCard, ExpenseRecord } from "@/components/finance/ExpenseList";
 
 interface ExpenseApprovalPanelProps {
@@ -12,6 +13,7 @@ interface ExpenseApprovalPanelProps {
 export function ExpenseApprovalPanel({ onFlash }: ExpenseApprovalPanelProps) {
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     const res = await fetch("/api/finance/expenses?all=1&status=PENDING");
@@ -30,7 +32,11 @@ export function ExpenseApprovalPanel({ onFlash }: ExpenseApprovalPanelProps) {
     const res = await fetch("/api/finance/expenses", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action }),
+      body: JSON.stringify({
+        id,
+        action,
+        reviewNotes: action === "reject" ? rejectNotes[id] || undefined : undefined,
+      }),
     });
     setLoading(false);
 
@@ -40,7 +46,19 @@ export function ExpenseApprovalPanel({ onFlash }: ExpenseApprovalPanelProps) {
       return;
     }
 
-    onFlash(action === "approve" ? "Expense approved" : "Expense rejected");
+    const data = await res.json();
+    let msg = action === "approve" ? "Expense approved" : "Expense rejected";
+    if (data.journalWarning) {
+      msg += ` — ${data.journalWarning}`;
+      onFlash(msg, true);
+    } else {
+      onFlash(msg);
+    }
+    setRejectNotes((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     load();
   }
 
@@ -56,12 +74,20 @@ export function ExpenseApprovalPanel({ onFlash }: ExpenseApprovalPanelProps) {
       ) : (
         <div className="space-y-3">
           {expenses.map((expense) => (
-            <ExpenseCard
-              key={expense.id}
-              expense={expense}
-              showEmployee
-              actions={
-                <>
+            <div key={expense.id}>
+              <ExpenseCard expense={expense} showEmployee />
+              <div className="mt-2 rounded-lg border border-slate-200 bg-white p-3">
+                <Label htmlFor={`reject-notes-${expense.id}`}>Reject notes (optional)</Label>
+                <Textarea
+                  id={`reject-notes-${expense.id}`}
+                  className="mt-1 min-h-[60px]"
+                  value={rejectNotes[expense.id] ?? ""}
+                  onChange={(e) =>
+                    setRejectNotes((prev) => ({ ...prev, [expense.id]: e.target.value }))
+                  }
+                  placeholder="Reason for rejection, if applicable"
+                />
+                <div className="mt-2 flex gap-2">
                   <Button
                     size="sm"
                     disabled={loading}
@@ -77,9 +103,9 @@ export function ExpenseApprovalPanel({ onFlash }: ExpenseApprovalPanelProps) {
                   >
                     Reject
                   </Button>
-                </>
-              }
-            />
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       )}

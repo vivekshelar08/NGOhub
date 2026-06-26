@@ -4,9 +4,11 @@ import {
   ExpenseCategory,
   ExpenseFunction,
   FundRestriction,
+  JournalEntryStatus,
   JournalSourceType,
   PaymentType,
 } from "@/generated/prisma/enums";
+import { resolveFundId } from "@/lib/finance-meta";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -242,6 +244,7 @@ export async function postJournalEntry(
     sourceType: JournalSourceType;
     sourceId?: string;
     createdById: string;
+    status?: JournalEntryStatus;
     lines: JournalLineInput[];
   }
 ) {
@@ -280,7 +283,7 @@ export async function postJournalEntry(
       description: params.description,
       sourceType: params.sourceType,
       sourceId: params.sourceId,
-      status: "POSTED",
+      status: params.status ?? "POSTED",
       createdById: params.createdById,
       lines: { create: lineData },
     },
@@ -325,8 +328,11 @@ export async function postExpenseJournal(
   }
 
   const amount = Number(expense.amount);
-  const fund = expense.fundId
-    ? await prisma.fund.findUnique({ where: { id: expense.fundId } })
+  const fundId =
+    expense.fundId ??
+    (await resolveFundId(prisma, { fundId: null, fundType: expense.fundType }));
+  const fund = fundId
+    ? await prisma.fund.findUnique({ where: { id: fundId } })
     : await getDefaultFund(prisma);
 
   const entry = await postJournalEntry(prisma, {
@@ -375,9 +381,8 @@ export async function postDonationJournal(
   if (!donation || donation.journalEntryId) return null;
 
   const amount = Number(donation.amount);
-  const fund = donation.fundId
-    ? await prisma.fund.findUnique({ where: { id: donation.fundId } })
-    : await getDefaultFund(prisma);
+  const fundId = await resolveFundId(prisma, { fundId: donation.fundId });
+  const fund = fundId ? await prisma.fund.findUnique({ where: { id: fundId } }) : await getDefaultFund(prisma);
 
   const incomeCode = fund?.isFcra ? "4200" : fund?.code === "CSR" ? "4100" : "4000";
   const paymentCode =
@@ -485,11 +490,26 @@ export async function postVendorBillJournal(
   });
   if (!bill || bill.status !== "APPROVED" || bill.journalEntryId) return null;
 
-  const amount = Number(bill.amount);
+  const gross = Number(bill.amount);
+  const tds = Number(bill.tdsAmount ?? 0);
+  const netExpense = gross - tds;
   const expenseCode = bill.ledgerAccount?.code ?? "5200";
   const fund = bill.fundId
     ? await prisma.fund.findUnique({ where: { id: bill.fundId } })
     : await getDefaultFund(prisma);
+
+  const lines: JournalLineInput[] = [
+    {
+      accountCode: expenseCode,
+      debit: netExpense,
+      fundId: fund?.id,
+      financeProjectId: bill.financeProjectId,
+    },
+  ];
+  if (tds > 0) {
+    lines.push({ accountCode: "1100", debit: tds, fundId: fund?.id, narration: "TDS on vendor bill" });
+  }
+  lines.push({ accountCode: "2000", credit: gross, fundId: fund?.id });
 
   const entry = await postJournalEntry(prisma, {
     entryDate: bill.billDate,
@@ -497,15 +517,7 @@ export async function postVendorBillJournal(
     sourceType: "VENDOR_BILL",
     sourceId: billId,
     createdById: userId,
-    lines: [
-      {
-        accountCode: expenseCode,
-        debit: amount,
-        fundId: fund?.id,
-        financeProjectId: bill.financeProjectId,
-      },
-      { accountCode: "2000", credit: amount, fundId: fund?.id },
-    ],
+    lines,
   });
 
   await prisma.vendorBill.update({
@@ -518,7 +530,7 @@ export async function postVendorBillJournal(
     entityType: "VendorBill",
     entityId: billId,
     userId,
-    details: { voucherNumber: entry.voucherNumber, amount },
+    details: { voucherNumber: entry.voucherNumber, gross, tds, netExpense },
   });
 
   return entry;
@@ -568,6 +580,123 @@ export async function postVendorPaymentJournal(
     entityId: paymentId,
     userId,
     details: { voucherNumber: entry.voucherNumber, amount },
+  });
+
+  return entry;
+}
+
+export async function reverseJournalEntry(
+  prisma: PrismaClient,
+  journalEntryId: string,
+  userId: string,
+  reason?: string
+) {
+  const original = await prisma.journalEntry.findUnique({
+    where: { id: journalEntryId },
+    include: { lines: { include: { ledgerAccount: true } } },
+  });
+  if (!original || original.status === "REVERSED") {
+    throw new Error("Journal entry not found or already reversed");
+  }
+
+  const reversingLines: JournalLineInput[] = original.lines.map((line) => ({
+    accountCode: line.ledgerAccount.code,
+    debit: Number(line.credit),
+    credit: Number(line.debit),
+    fundId: line.fundId,
+    financeProjectId: line.financeProjectId,
+    narration: `Reversal: ${line.narration ?? ""}`,
+  }));
+
+  const entry = await postJournalEntry(prisma, {
+    entryDate: new Date(),
+    description: `Reversal of ${original.voucherNumber}${reason ? ` — ${reason}` : ""}`,
+    sourceType: "ADJUSTMENT",
+    sourceId: original.id,
+    createdById: userId,
+    lines: reversingLines,
+  });
+
+  await prisma.journalEntry.update({
+    where: { id: original.id },
+    data: { status: "REVERSED" },
+  });
+
+  await logFinanceAudit(prisma, {
+    action: "JOURNAL_REVERSED",
+    entityType: "JournalEntry",
+    entityId: original.id,
+    userId,
+    details: { reversingVoucher: entry.voucherNumber },
+  });
+
+  return entry;
+}
+
+export async function postInterFundTransfer(
+  prisma: PrismaClient,
+  params: {
+    entryDate: Date;
+    fromFundId: string;
+    toFundId: string;
+    amount: number;
+    bankAccountCode?: string;
+    description: string;
+    createdById: string;
+  }
+) {
+  const bankCode = params.bankAccountCode ?? "1000";
+  return postJournalEntry(prisma, {
+    entryDate: params.entryDate,
+    description: params.description,
+    sourceType: "ADJUSTMENT",
+    createdById: params.createdById,
+    lines: [
+      { accountCode: bankCode, debit: params.amount, fundId: params.toFundId },
+      { accountCode: bankCode, credit: params.amount, fundId: params.fromFundId },
+    ],
+  });
+}
+
+export async function postBankStatementJournal(
+  prisma: PrismaClient,
+  statementLineId: string,
+  userId: string
+) {
+  const line = await prisma.bankStatementLine.findUnique({
+    where: { id: statementLineId },
+    include: { bankAccount: { include: { ledgerAccount: true } } },
+  });
+  if (!line || line.journalEntryId) return null;
+
+  const debit = Number(line.debit);
+  const credit = Number(line.credit);
+  const bankCode = line.bankAccount.ledgerAccount.code;
+  const entryDate = line.transactionDate;
+
+  const journalLines: JournalLineInput[] = [];
+  if (debit > 0) {
+    journalLines.push({ accountCode: bankCode, debit });
+    journalLines.push({ accountCode: "4400", credit: debit, narration: line.description ?? undefined });
+  } else if (credit > 0) {
+    journalLines.push({ accountCode: "5200", debit: credit, narration: line.description ?? undefined });
+    journalLines.push({ accountCode: bankCode, credit });
+  } else {
+    return null;
+  }
+
+  const entry = await postJournalEntry(prisma, {
+    entryDate,
+    description: line.description ?? `Bank statement ${line.reference ?? line.id.slice(0, 8)}`,
+    sourceType: "BANK",
+    sourceId: statementLineId,
+    createdById: userId,
+    lines: journalLines,
+  });
+
+  await prisma.bankStatementLine.update({
+    where: { id: statementLineId },
+    data: { journalEntryId: entry.id, isReconciled: true, reconciledAt: new Date() },
   });
 
   return entry;

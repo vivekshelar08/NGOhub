@@ -4,12 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 import { Download, IndianRupee } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
-import { Input, Label } from "@/components/ui/Input";
+import { Input, Label, Select } from "@/components/ui/Input";
 import { generate80GReceiptDocx } from "@/lib/donationReceipt";
 import { formatCurrency } from "@/lib/finance-utils";
+import { loadDonors } from "@/lib/donors";
+import { useFinanceMeta } from "@/hooks/useFinanceMeta";
 
 interface Donation {
   id: string;
+  donorId: string | null;
   donorName: string;
   donorPan: string | null;
   amount: number;
@@ -18,6 +21,11 @@ interface Donation {
   purpose: string | null;
   receiptNumber: string;
   is80GEligible: boolean;
+  fundId: string | null;
+  financeProjectId: string | null;
+  fund: { id: string; code: string; name: string } | null;
+  financeProject: { id: string; code: string; name: string } | null;
+  journalEntry: { id: string; voucherNumber: string; status: string } | null;
   recordedBy: { id: string; name: string };
 }
 
@@ -35,7 +43,9 @@ function downloadBlob(blob: Blob, fileName: string) {
 }
 
 export function DonationsPanel({ onFlash }: DonationsPanelProps) {
+  const { meta } = useFinanceMeta();
   const [donations, setDonations] = useState<Donation[]>([]);
+  const [donors, setDonors] = useState(loadDonors());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -51,16 +61,21 @@ export function DonationsPanel({ onFlash }: DonationsPanelProps) {
       .then((r) => r.json())
       .then((d) => setOrgSettings(d.settings ?? {}))
       .catch(() => {});
+    setDonors(loadDonors());
   }, []);
+
   const [showForm, setShowForm] = useState(false);
 
   const [form, setForm] = useState({
+    donorId: "",
     donorName: "",
     donorPan: "",
     amount: "",
     donationDate: new Date().toISOString().slice(0, 10),
     paymentMode: "UPI",
     purpose: "",
+    fundId: "",
+    financeProjectId: "",
     is80GEligible: true,
   });
 
@@ -80,6 +95,16 @@ export function DonationsPanel({ onFlash }: DonationsPanelProps) {
     load();
   }, [load]);
 
+  function selectDonor(donorId: string) {
+    const donor = donors.find((d) => d.id === donorId);
+    setForm((f) => ({
+      ...f,
+      donorId,
+      donorName: donor?.name ?? "",
+      donorPan: donor?.panOrRegNo ?? "",
+    }));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const amount = parseFloat(form.amount);
@@ -93,32 +118,46 @@ export function DonationsPanel({ onFlash }: DonationsPanelProps) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        donorId: form.donorId || undefined,
         donorName: form.donorName.trim(),
         donorPan: form.donorPan || undefined,
         amount,
         donationDate: form.donationDate,
         paymentMode: form.paymentMode || undefined,
         purpose: form.purpose || undefined,
+        fundId: form.fundId || undefined,
+        financeProjectId: form.financeProjectId || undefined,
         is80GEligible: form.is80GEligible,
       }),
     });
     setSubmitting(false);
 
     if (res.ok) {
-      flash("Donation recorded.");
+      const data = await res.json();
+      let msg = "Donation recorded.";
+      if (data.journalWarning) {
+        msg += ` ${data.journalWarning}`;
+        flash(msg, true);
+      } else {
+        flash(msg);
+      }
       setForm({
+        donorId: "",
         donorName: "",
         donorPan: "",
         amount: "",
         donationDate: new Date().toISOString().slice(0, 10),
         paymentMode: "UPI",
         purpose: "",
+        fundId: "",
+        financeProjectId: "",
         is80GEligible: true,
       });
       setShowForm(false);
       load();
     } else {
-      flash("Failed to record donation.", true);
+      const data = await res.json().catch(() => ({}));
+      flash(data.error ?? "Failed to record donation.", true);
     }
   }
 
@@ -167,6 +206,21 @@ export function DonationsPanel({ onFlash }: DonationsPanelProps) {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
+                <Label htmlFor="donor-picker">Select donor</Label>
+                <Select
+                  id="donor-picker"
+                  value={form.donorId}
+                  onChange={(e) => selectDonor(e.target.value)}
+                >
+                  <option value="">Manual entry</option>
+                  {donors.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
                 <Label htmlFor="donor-name">Donor name *</Label>
                 <Input
                   id="donor-name"
@@ -183,6 +237,36 @@ export function DonationsPanel({ onFlash }: DonationsPanelProps) {
                   onChange={(e) => setForm((f) => ({ ...f, donorPan: e.target.value.toUpperCase() }))}
                   maxLength={10}
                 />
+              </div>
+              <div>
+                <Label htmlFor="donation-fund">Fund</Label>
+                <Select
+                  id="donation-fund"
+                  value={form.fundId}
+                  onChange={(e) => setForm((f) => ({ ...f, fundId: e.target.value }))}
+                >
+                  <option value="">Default</option>
+                  {meta?.funds.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.code} — {f.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="donation-project">Finance project</Label>
+                <Select
+                  id="donation-project"
+                  value={form.financeProjectId}
+                  onChange={(e) => setForm((f) => ({ ...f, financeProjectId: e.target.value }))}
+                >
+                  <option value="">None</option>
+                  {meta?.financeProjects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.code} — {p.name}
+                    </option>
+                  ))}
+                </Select>
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
@@ -254,12 +338,26 @@ export function DonationsPanel({ onFlash }: DonationsPanelProps) {
               className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4"
             >
               <div>
-                <p className="font-semibold text-brand-ink">{d.donorName}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-semibold text-brand-ink">{d.donorName}</p>
+                  {d.journalEntry && (
+                    <span className="rounded bg-brand-teal/10 px-2 py-0.5 text-xs font-medium text-brand-teal">
+                      GL {d.journalEntry.voucherNumber}
+                    </span>
+                  )}
+                </div>
                 <p className="mt-0.5 text-sm text-slate-500">
                   {new Date(d.donationDate).toLocaleDateString("en-IN")}
                   {d.paymentMode && ` · ${d.paymentMode}`}
                   {d.purpose && ` · ${d.purpose}`}
                 </p>
+                {(d.fund || d.financeProject) && (
+                  <p className="mt-1 text-xs text-slate-400">
+                    {d.fund && `Fund ${d.fund.code}`}
+                    {d.fund && d.financeProject && " · "}
+                    {d.financeProject && `Project ${d.financeProject.code}`}
+                  </p>
+                )}
                 <p className="mt-1 text-xs text-slate-400">
                   Receipt {d.receiptNumber} · recorded by {d.recordedBy.name}
                 </p>

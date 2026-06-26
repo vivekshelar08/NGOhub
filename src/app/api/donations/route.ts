@@ -4,6 +4,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/role-features";
 import { nextReceiptNumber } from "@/lib/donationReceipt";
 import { z } from "zod";
+import { resolveFinanceProjectId, resolveFundId } from "@/lib/finance-meta";
+import { ensureAccountingSetup, postDonationJournal } from "@/lib/accounting";
 
 const createSchema = z.object({
   donorId: z.string().optional(),
@@ -14,9 +16,60 @@ const createSchema = z.object({
   paymentMode: z.string().optional(),
   purpose: z.string().optional(),
   projectId: z.string().optional(),
+  fundId: z.string().optional(),
+  financeProjectId: z.string().optional(),
   is80GEligible: z.boolean().optional(),
   receiptNumber: z.string().optional(),
 });
+
+const donationInclude = {
+  recordedBy: { select: { id: true, name: true } },
+  fund: { select: { id: true, code: true, name: true } },
+  financeProject: { select: { id: true, code: true, name: true } },
+  journalEntry: { select: { id: true, voucherNumber: true, status: true } },
+} as const;
+
+function serializeDonation(d: {
+  id: string;
+  donorId: string | null;
+  donorName: string;
+  donorPan: string | null;
+  amount: { toString(): string };
+  donationDate: Date;
+  receiptNumber: string;
+  paymentMode: string | null;
+  purpose: string | null;
+  projectId: string | null;
+  fundId: string | null;
+  financeProjectId: string | null;
+  is80GEligible: boolean;
+  createdAt: Date;
+  recordedBy: { id: string; name: string };
+  fund: { id: string; code: string; name: string } | null;
+  financeProject: { id: string; code: string; name: string } | null;
+  journalEntry: { id: string; voucherNumber: string; status: string } | null;
+}) {
+  return {
+    id: d.id,
+    donorId: d.donorId,
+    donorName: d.donorName,
+    donorPan: d.donorPan,
+    amount: Number(d.amount),
+    donationDate: d.donationDate.toISOString().slice(0, 10),
+    receiptNumber: d.receiptNumber,
+    paymentMode: d.paymentMode,
+    purpose: d.purpose,
+    projectId: d.projectId,
+    fundId: d.fundId,
+    financeProjectId: d.financeProjectId,
+    is80GEligible: d.is80GEligible,
+    fund: d.fund,
+    financeProject: d.financeProject,
+    journalEntry: d.journalEntry,
+    recordedBy: d.recordedBy,
+    createdAt: d.createdAt.toISOString(),
+  };
+}
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -27,22 +80,15 @@ export async function GET() {
   const donations = await prisma.donation.findMany({
     orderBy: { donationDate: "desc" },
     take: 200,
-    include: { recordedBy: { select: { id: true, name: true } } },
+    include: donationInclude,
   });
 
-  return NextResponse.json({
-    donations: donations.map((d) => ({
-      ...d,
-      amount: Number(d.amount),
-      donationDate: d.donationDate.toISOString().slice(0, 10),
-      createdAt: d.createdAt.toISOString(),
-    })),
-  });
+  return NextResponse.json({ donations: donations.map(serializeDonation) });
 }
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
-  if (!user || !hasFeature(user.role, "finance.submit")) {
+  if (!user || !hasFeature(user.role, "finance.donations")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -50,6 +96,12 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid donation" }, { status: 400 });
   }
+
+  const fundId = await resolveFundId(prisma, { fundId: parsed.data.fundId });
+  const financeProjectId = await resolveFinanceProjectId(prisma, {
+    financeProjectId: parsed.data.financeProjectId,
+    projectId: parsed.data.projectId,
+  });
 
   const receiptNumber = parsed.data.receiptNumber ?? nextReceiptNumber();
   const donation = await prisma.donation.create({
@@ -62,27 +114,32 @@ export async function POST(request: Request) {
       paymentMode: parsed.data.paymentMode,
       purpose: parsed.data.purpose,
       projectId: parsed.data.projectId,
+      fundId,
+      financeProjectId,
       is80GEligible: parsed.data.is80GEligible ?? true,
       receiptNumber,
       recordedById: user.id,
     },
-    include: { recordedBy: { select: { id: true, name: true } } },
+    include: donationInclude,
   });
 
-  const { ensureAccountingSetup, postDonationJournal } = await import("@/lib/accounting");
+  let journalWarning: string | undefined;
   try {
     await ensureAccountingSetup(prisma);
-    await postDonationJournal(prisma, donation.id, user.id);
+    const entry = await postDonationJournal(prisma, donation.id, user.id);
+    if (!entry) journalWarning = "Donation saved but journal was not posted.";
   } catch (error) {
-    console.error("Donation journal posting failed:", error);
+    journalWarning =
+      error instanceof Error ? `GL posting failed: ${error.message}` : "GL posting failed.";
   }
 
+  const refreshed = await prisma.donation.findUnique({
+    where: { id: donation.id },
+    include: donationInclude,
+  });
+
   return NextResponse.json({
-    donation: {
-      ...donation,
-      amount: Number(donation.amount),
-      donationDate: donation.donationDate.toISOString().slice(0, 10),
-      createdAt: donation.createdAt.toISOString(),
-    },
+    donation: serializeDonation(refreshed ?? donation),
+    journalWarning,
   });
 }

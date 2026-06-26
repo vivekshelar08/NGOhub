@@ -18,6 +18,7 @@ const lineSchema = z.object({
 const createSchema = z.object({
   entryDate: z.string(),
   description: z.string().min(1),
+  status: z.enum(["DRAFT", "POSTED"]).optional(),
   lines: z.array(lineSchema).min(2),
 });
 
@@ -86,6 +87,7 @@ export async function POST(request: Request) {
       description: parsed.data.description,
       sourceType: "MANUAL",
       createdById: user.id,
+      status: parsed.data.status ?? "POSTED",
       lines: parsed.data.lines,
     });
 

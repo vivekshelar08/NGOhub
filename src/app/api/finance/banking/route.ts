@@ -145,6 +145,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ reconciliation }, { status: 201 });
   }
 
+  if (action === "post_journal") {
+    const lineId = body.statementLineId as string;
+    if (!lineId) return NextResponse.json({ error: "statementLineId required" }, { status: 400 });
+    const { postBankStatementJournal } = await import("@/lib/accounting");
+    try {
+      const entry = await postBankStatementJournal(prisma, lineId, user.id);
+      if (!entry) return NextResponse.json({ error: "Could not post journal" }, { status: 400 });
+      return NextResponse.json({ entry: { id: entry.id, voucherNumber: entry.voucherNumber } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Post failed";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+  }
+
+  if (action === "create_bank") {
+    const { name, accountType, ledgerAccountId, accountNumber, ifsc, bankName, openingBalance } =
+      body as Record<string, unknown>;
+    if (!name || !ledgerAccountId) {
+      return NextResponse.json({ error: "name and ledgerAccountId required" }, { status: 400 });
+    }
+    const bank = await prisma.bankAccount.create({
+      data: {
+        name: String(name),
+        accountType: (accountType as "DOMESTIC" | "FCRA" | "CASH") ?? "DOMESTIC",
+        ledgerAccountId: String(ledgerAccountId),
+        accountNumber: accountNumber ? String(accountNumber) : undefined,
+        ifsc: ifsc ? String(ifsc) : undefined,
+        bankName: bankName ? String(bankName) : undefined,
+        openingBalance: openingBalance ? Number(openingBalance) : 0,
+      },
+    });
+    return NextResponse.json({ bankAccount: bank }, { status: 201 });
+  }
+
   const parsed = statementLineSchema.safeParse(body);
   if (!parsed.success || !body.bankAccountId) {
     return NextResponse.json({ error: "Invalid statement line" }, { status: 400 });

@@ -86,6 +86,9 @@ export type FeatureId =
   | "finance.period_close"
   | "finance.compliance"
   | "finance.budget"
+  | "finance.donations"
+  | "finance.inter_fund"
+  | "finance.budget_actual"
   // HR
   | "hr.manage"
   | "hr.attendance"
@@ -562,6 +565,30 @@ export const FEATURES: FeatureDefinition[] = [
     label: "Project budgets",
     description: "Manage project budgets and fund allocations in the ledger",
     permission: "manage_accounting",
+    status: "live",
+  },
+  {
+    id: "finance.donations",
+    moduleId: "finance",
+    label: "Record donations",
+    description: "Record donations with fund and project allocation",
+    permission: "submit_expenses",
+    status: "live",
+  },
+  {
+    id: "finance.inter_fund",
+    moduleId: "finance",
+    label: "Inter-fund transfers",
+    description: "Transfer balances between restricted and unrestricted funds",
+    permission: "manage_accounting",
+    status: "live",
+  },
+  {
+    id: "finance.budget_actual",
+    moduleId: "finance",
+    label: "Budget vs actual",
+    description: "Compare project budgets to approved and pending expenses",
+    permission: "financial_reports",
     status: "live",
   },
 

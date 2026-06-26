@@ -90,3 +90,64 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ project }, { status: 201 });
 }
+
+const patchSchema = projectSchema.partial().extend({
+  id: z.string(),
+  isActive: z.boolean().optional(),
+});
+
+export async function PATCH(request: Request) {
+  const user = await getCurrentUser();
+  if (!user || !hasFeature(user.role, "finance.budget")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const parsed = patchSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid project" }, { status: 400 });
+  }
+
+  const { id, budgetLines, ...data } = parsed.data;
+  const project = await prisma.financeProject.update({
+    where: { id },
+    data: {
+      code: data.code,
+      name: data.name,
+      description: data.description,
+      fundingType: data.fundingType,
+      startDate: data.startDate ? new Date(data.startDate) : undefined,
+      endDate: data.endDate ? new Date(data.endDate) : undefined,
+      totalBudget: data.totalBudget,
+      legacyProjectId: data.legacyProjectId,
+      isActive: data.isActive,
+      ...(budgetLines
+        ? {
+            budgetLines: {
+              deleteMany: {},
+              create: budgetLines,
+            },
+          }
+        : {}),
+    },
+    include: { budgetLines: { include: { fund: true } } },
+  });
+
+  return NextResponse.json({ project });
+}
+
+export async function DELETE(request: Request) {
+  const user = await getCurrentUser();
+  if (!user || !hasFeature(user.role, "finance.budget")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id } = (await request.json()) as { id?: string };
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  await prisma.financeProject.update({
+    where: { id },
+    data: { isActive: false },
+  });
+
+  return NextResponse.json({ ok: true });
+}

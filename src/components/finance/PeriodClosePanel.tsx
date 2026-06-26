@@ -6,12 +6,20 @@ import { Card, CardTitle } from "@/components/ui/Card";
 
 interface PeriodClosePanelProps {
   onFlash?: (msg: string, isError?: boolean) => void;
+  isAdmin?: boolean;
 }
 
-export function PeriodClosePanel({ onFlash }: PeriodClosePanelProps) {
+export function PeriodClosePanel({ onFlash, isAdmin }: PeriodClosePanelProps) {
   const [financialYear, setFinancialYear] = useState("");
   const [periods, setPeriods] = useState<
-    Array<{ id: string; month: number; year: number; status: string }>
+    Array<{
+      id: string;
+      month: number;
+      year: number;
+      status: string;
+      closedAt: string | null;
+      closedBy: { id: string; name: string } | null;
+    }>
   >([]);
   const [auditLogs, setAuditLogs] = useState<
     Array<{
@@ -42,7 +50,7 @@ export function PeriodClosePanel({ onFlash }: PeriodClosePanelProps) {
     const res = await fetch("/api/finance/periods", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ periodId }),
+      body: JSON.stringify({ periodId, action: "close" }),
     });
     if (res.ok) {
       flash("Period closed — no further postings allowed");
@@ -50,6 +58,21 @@ export function PeriodClosePanel({ onFlash }: PeriodClosePanelProps) {
     } else {
       const d = await res.json();
       flash(d.error ?? "Failed to close period", true);
+    }
+  }
+
+  async function reopenPeriod(periodId: string) {
+    const res = await fetch("/api/finance/periods", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ periodId, action: "reopen" }),
+    });
+    if (res.ok) {
+      flash("Period reopened");
+      load();
+    } else {
+      const d = await res.json();
+      flash(d.error ?? "Failed to reopen period", true);
     }
   }
 
@@ -61,6 +84,11 @@ export function PeriodClosePanel({ onFlash }: PeriodClosePanelProps) {
       <p className="text-sm text-slate-600">
         Financial year: <strong>{financialYear}</strong>. Close each month after reconciliation
         and review. Closed periods block new journal postings.
+        {!isAdmin && (
+          <span className="mt-1 block text-xs text-slate-500">
+            Only an admin can reopen closed periods.
+          </span>
+        )}
       </p>
 
       <Card>
@@ -69,19 +97,31 @@ export function PeriodClosePanel({ onFlash }: PeriodClosePanelProps) {
           {periods.map((p) => (
             <div
               key={p.id}
-              className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${
+              className={`rounded-lg border px-3 py-2 text-sm ${
                 p.status === "CLOSED" ? "border-slate-200 bg-slate-50" : "border-amber-200 bg-amber-50"
               }`}
             >
-              <span>
-                {monthName(p.month)} {p.year}
-              </span>
-              {p.status === "OPEN" ? (
-                <Button size="sm" variant="outline" onClick={() => closePeriod(p.id)}>
-                  Close
-                </Button>
-              ) : (
-                <span className="text-xs font-medium text-slate-500">Closed</span>
+              <div className="flex items-center justify-between gap-2">
+                <span>
+                  {monthName(p.month)} {p.year}
+                </span>
+                {p.status === "OPEN" ? (
+                  <Button size="sm" variant="outline" onClick={() => closePeriod(p.id)}>
+                    Close
+                  </Button>
+                ) : isAdmin ? (
+                  <Button size="sm" variant="outline" onClick={() => reopenPeriod(p.id)}>
+                    Reopen
+                  </Button>
+                ) : (
+                  <span className="text-xs font-medium text-slate-500">Closed</span>
+                )}
+              </div>
+              {p.status === "CLOSED" && p.closedAt && (
+                <p className="mt-1 text-xs text-slate-500">
+                  Closed {new Date(p.closedAt).toLocaleString("en-IN")}
+                  {p.closedBy && ` by ${p.closedBy.name}`}
+                </p>
               )}
             </div>
           ))}

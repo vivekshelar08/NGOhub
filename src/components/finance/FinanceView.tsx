@@ -15,6 +15,9 @@ import { FinancialReportsPanel } from "@/components/finance/FinancialReportsPane
 import { PeriodClosePanel } from "@/components/finance/PeriodClosePanel";
 import { ComplianceExportsPanel } from "@/components/finance/ComplianceExportsPanel";
 import { ProjectBudgetPanel } from "@/components/finance/ProjectBudgetPanel";
+import { BudgetVsActualPanel } from "@/components/finance/BudgetVsActualPanel";
+import { InterFundPanel } from "@/components/finance/InterFundPanel";
+import { PayrollJournalsPanel } from "@/components/finance/PayrollJournalsPanel";
 
 type FinanceTab =
   | "add"
@@ -28,7 +31,10 @@ type FinanceTab =
   | "reports"
   | "periods"
   | "compliance"
-  | "budget";
+  | "budget"
+  | "budget_actual"
+  | "inter_fund"
+  | "payroll";
 
 interface FinanceViewProps {
   userName: string;
@@ -41,6 +47,10 @@ interface FinanceViewProps {
   canPeriodClose: boolean;
   canCompliance: boolean;
   canBudget: boolean;
+  canDonations: boolean;
+  canInterFund: boolean;
+  canBudgetActual: boolean;
+  isAdmin?: boolean;
 }
 
 export function FinanceView({
@@ -54,6 +64,10 @@ export function FinanceView({
   canPeriodClose,
   canCompliance,
   canBudget,
+  canDonations,
+  canInterFund,
+  canBudgetActual,
+  isAdmin,
 }: FinanceViewProps) {
   const defaultTab: FinanceTab = canAccounting
     ? "accounting"
@@ -76,13 +90,16 @@ export function FinanceView({
     { id: "vendors", label: "Vendors", show: canVendors },
     { id: "banking", label: "Banking", show: canBanking },
     { id: "budget", label: "Projects", show: canBudget },
+    { id: "budget_actual", label: "Budget vs actual", show: canBudgetActual },
+    { id: "inter_fund", label: "Inter-fund", show: canInterFund },
+    { id: "payroll", label: "Payroll GL", show: canAccounting },
     { id: "compliance", label: "Compliance", show: canCompliance },
     { id: "periods", label: "Period close", show: canPeriodClose },
     { id: "add", label: "Submit expense", show: canSubmit },
     { id: "my", label: "My expenses", show: canSubmit },
     { id: "approvals", label: "Approve", show: canApprove },
     { id: "conveyance", label: "Travel sheet", show: canSubmit || canApprove },
-    { id: "donations", label: "Donations", show: canSubmit || canApprove },
+    { id: "donations", label: "Donations", show: canDonations },
   ];
 
   const isAccountingTab = [
@@ -93,6 +110,9 @@ export function FinanceView({
     "periods",
     "compliance",
     "budget",
+    "budget_actual",
+    "inter_fund",
+    "payroll",
   ].includes(tab);
 
   return (
@@ -142,9 +162,14 @@ export function FinanceView({
       {tab === "vendors" && canVendors && <VendorsPanel onFlash={onFlash} />}
       {tab === "banking" && canBanking && <BankingPanel onFlash={onFlash} />}
       {tab === "reports" && canReports && <FinancialReportsPanel />}
-      {tab === "periods" && canPeriodClose && <PeriodClosePanel onFlash={onFlash} />}
+      {tab === "periods" && canPeriodClose && (
+        <PeriodClosePanel onFlash={onFlash} isAdmin={isAdmin} />
+      )}
       {tab === "compliance" && canCompliance && <ComplianceExportsPanel />}
       {tab === "budget" && canBudget && <ProjectBudgetPanel onFlash={onFlash} />}
+      {tab === "budget_actual" && canBudgetActual && <BudgetVsActualPanel />}
+      {tab === "inter_fund" && canInterFund && <InterFundPanel onFlash={onFlash} />}
+      {tab === "payroll" && canAccounting && <PayrollJournalsPanel />}
 
       {tab === "add" && canSubmit && (
         <AddExpenseForm onSuccess={(msg) => onFlash(msg)} onError={(msg) => onFlash(msg, true)} />
@@ -158,9 +183,7 @@ export function FinanceView({
         <ConveyanceExportPanel userName={userName} canViewAll={canApprove} />
       )}
 
-      {tab === "donations" && (canSubmit || canApprove) && (
-        <DonationsPanel onFlash={onFlash} />
-      )}
+      {tab === "donations" && canDonations && <DonationsPanel onFlash={onFlash} />}
     </PageShell>
   );
 }

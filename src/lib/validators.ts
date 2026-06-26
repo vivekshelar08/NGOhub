@@ -261,6 +261,8 @@ export const expenseSchema = z.object({
   projectId: z.string().optional(),
   budgetHead: z.string().optional(),
   fundType: z.string().optional(),
+  fundId: z.string().optional(),
+  financeProjectId: z.string().optional(),
   attachments: z.array(expenseAttachmentSchema).min(1, "At least one bill photo or PDF is required"),
 });
 

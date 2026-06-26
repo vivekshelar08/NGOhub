@@ -24,6 +24,14 @@ export interface ExpenseRecord {
   conveyanceKm: number | null;
   status: ExpenseStatus;
   reviewNotes: string | null;
+  projectId: string | null;
+  budgetHead: string | null;
+  fundType: string | null;
+  fundId: string | null;
+  financeProjectId: string | null;
+  fund: { id: string; code: string; name: string } | null;
+  financeProject: { id: string; code: string; name: string } | null;
+  journalEntry: { id: string; voucherNumber: string; status: string } | null;
   submittedBy: { id: string; name: string; department: string | null };
   attachments: Array<{ id: string; fileName: string; mimeType: string; dataUrl: string }>;
 }
@@ -112,6 +120,11 @@ export function ExpenseCard({
             >
               {EXPENSE_STATUS_LABELS[expense.status]}
             </StatusBadge>
+            {expense.journalEntry && (
+              <span className="rounded bg-brand-teal/10 px-2 py-0.5 text-xs font-medium text-brand-teal">
+                GL {expense.journalEntry.voucherNumber}
+              </span>
+            )}
           </div>
           {showEmployee && (
             <p className="mt-1 text-sm text-slate-600">
@@ -122,6 +135,24 @@ export function ExpenseCard({
           <p className="mt-1 text-sm text-slate-500">
             {expense.expenseDate} · {PAYMENT_TYPE_LABELS[expense.paymentType]}
           </p>
+          {(expense.fund || expense.financeProject || expense.budgetHead) && (
+            <p className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+              {expense.fund && (
+                <span className="rounded bg-slate-100 px-1.5 py-0.5">Fund {expense.fund.code}</span>
+              )}
+              {expense.financeProject && (
+                <span className="rounded bg-slate-100 px-1.5 py-0.5">
+                  {expense.financeProject.code}
+                </span>
+              )}
+              {expense.budgetHead && (
+                <span className="rounded bg-slate-100 px-1.5 py-0.5">{expense.budgetHead}</span>
+              )}
+              {expense.fundType && !expense.fund && (
+                <span className="rounded bg-slate-100 px-1.5 py-0.5">{expense.fundType}</span>
+              )}
+            </p>
+          )}
         </div>
         <p className="text-lg font-bold text-brand-ink">{formatCurrency(expense.amount)}</p>
       </div>

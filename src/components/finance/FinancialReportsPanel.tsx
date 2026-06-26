@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
+import { Input, Label } from "@/components/ui/Input";
 import { formatCurrency } from "@/lib/finance-utils";
 
 const REPORTS = [
@@ -16,20 +17,32 @@ const REPORTS = [
   { id: "receipts-payments", label: "Receipts & payments" },
 ] as const;
 
+function defaultFromDate() {
+  const now = new Date();
+  const month = now.getMonth();
+  const year = month >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${year}-04-01`;
+}
+
 export function FinancialReportsPanel() {
   const [report, setReport] = useState<string>("profit-loss");
+  const [fromDate, setFromDate] = useState(defaultFromDate);
+  const [toDate, setToDate] = useState(new Date().toISOString().slice(0, 10));
   const [data, setData] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/finance/reports?report=${report}`);
+    const params = new URLSearchParams({ report });
+    if (fromDate) params.set("from", fromDate);
+    if (toDate) params.set("to", toDate);
+    const res = await fetch(`/api/finance/reports?${params}`);
     if (res.ok) {
       const d = await res.json();
       setData(d.data);
     }
     setLoading(false);
-  }, [report]);
+  }, [report, fromDate, toDate]);
 
   useEffect(() => {
     load();
@@ -47,18 +60,39 @@ export function FinancialReportsPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          value={report}
-          onChange={(e) => setReport(e.target.value)}
-        >
-          {REPORTS.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.label}
-            </option>
-          ))}
-        </select>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <Label>Report</Label>
+          <select
+            className="mt-1 block rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            value={report}
+            onChange={(e) => setReport(e.target.value)}
+          >
+            {REPORTS.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label>From</Label>
+          <Input
+            type="date"
+            className="mt-1"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label>To</Label>
+          <Input
+            type="date"
+            className="mt-1"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+          />
+        </div>
         <Button size="sm" variant="outline" onClick={load} disabled={loading}>
           Refresh
         </Button>

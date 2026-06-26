@@ -5,8 +5,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/role-features";
 import { ensureAccountingSetup, getCurrentFinancialYear, logFinanceAudit } from "@/lib/accounting";
 
-const closeSchema = z.object({
+const actionSchema = z.object({
   periodId: z.string(),
+  action: z.enum(["close", "reopen"]).default("close"),
 });
 
 export async function GET() {
@@ -58,7 +59,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const parsed = closeSchema.safeParse(await request.json());
+  const parsed = actionSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
@@ -69,6 +70,28 @@ export async function PATCH(request: Request) {
   if (!period) {
     return NextResponse.json({ error: "Period not found" }, { status: 404 });
   }
+
+  if (parsed.data.action === "reopen") {
+    if (!hasFeature(user.role, "admin.access") && user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Only admin can reopen periods" }, { status: 403 });
+    }
+    if (period.status === "OPEN") {
+      return NextResponse.json({ error: "Period is already open" }, { status: 400 });
+    }
+    const updated = await prisma.financialPeriod.update({
+      where: { id: period.id },
+      data: { status: "OPEN", closedAt: null, closedById: null },
+    });
+    await logFinanceAudit(prisma, {
+      action: "PERIOD_REOPENED",
+      entityType: "FinancialPeriod",
+      entityId: period.id,
+      userId: user.id,
+      details: { month: period.month, year: period.year },
+    });
+    return NextResponse.json({ period: updated });
+  }
+
   if (period.status === "CLOSED") {
     return NextResponse.json({ error: "Period already closed" }, { status: 400 });
   }
