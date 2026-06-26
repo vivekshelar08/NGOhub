@@ -113,16 +113,12 @@ URL-encode special characters in the database password (`@` → `%40`, `#` → `
 |---------|--------|
 | Install command | `npm ci` |
 | Build command | `npm run build` |
-| Start command | `npm run start` |
+| Start command | `next start -H 0.0.0.0 -p $PORT` |
 | Node.js version | **20** |
 
-`npm run start` runs `scripts/start.mjs`, which binds Next.js to `0.0.0.0` and Hostinger's `PORT`.
+Use the start command **exactly** as shown — do not use a wrapper script. Hostinger must run Next.js as the main process on `PORT`.
 
-**If you still get 503**, set Start command to:
-
-```bash
-next start -H 0.0.0.0 -p $PORT
-```
+`npm run start` is equivalent when `PORT` is set by Hostinger.
 
 4. Add **all** environment variables (required for build and runtime)
 
@@ -131,9 +127,9 @@ After the first deploy with password reset, run once from your machine (with pro
 ```bash
 npx prisma db push
 ```
-5. Deploy → **Runtime logs** should show `Starting Next.js on 0.0.0.0:XXXX`
+5. Deploy → **Runtime logs** should show `▲ Next.js` and `✓ Ready`
 
-**Intermittent 503?** Hostinger may stop idle Node apps. Use a free uptime monitor to ping `https://svitech.in/api/live` every 5 minutes. `/api/health` reports DB status but always returns HTTP 200 so the platform does not kill the app when Supabase is slow.
+**Intermittent 503?** Hostinger stops idle Node apps. The app self-pings `/api/live` every 4 minutes; also set up a free [UptimeRobot](https://uptimerobot.com) monitor on `https://svitech.in/api/live` every 5 minutes. `/api/health` always returns HTTP 200 so a slow database does not trigger Hostinger's error page.
 
 ## API endpoints
 

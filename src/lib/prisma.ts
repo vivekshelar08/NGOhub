@@ -56,9 +56,10 @@ function getPool() {
     globalForPrisma.pool = new Pool({
       connectionString,
       ssl: needsSsl(connectionString) ? { rejectUnauthorized: false } : undefined,
-      max: isPoolerConnectionString(connectionString) ? 2 : 5,
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 10_000,
+      max: isPoolerConnectionString(connectionString) ? 1 : 3,
+      idleTimeoutMillis: 20_000,
+      connectionTimeoutMillis: 8_000,
+      allowExitOnIdle: false,
     });
 
     globalForPrisma.pool.on("error", (error) => {
