@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { Download, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -59,8 +59,8 @@ export function PwaShell() {
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white p-4 shadow-[0_-8px_30px_rgba(15,23,42,0.12)] sm:bottom-4 sm:left-auto sm:right-4 sm:max-w-sm sm:rounded-2xl sm:border">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
-          <img src="/icons/icon-192.png" alt="" className="h-8 w-8 object-contain" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-teal text-white">
+          <Download className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-slate-900">Install NGO Hub</p>

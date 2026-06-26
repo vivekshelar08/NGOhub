@@ -1,107 +1,70 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import sharp from "sharp";
+import { deflateSync } from "node:zlib";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const root = join(__dirname, "..");
-const logoPath = join(root, "public", "svitech-logo.png");
-const iconsDir = join(root, "public", "icons");
-const appDir = join(root, "src", "app");
+const outDir = join(__dirname, "..", "public", "icons");
+mkdirSync(outDir, { recursive: true });
 
-mkdirSync(iconsDir, { recursive: true });
-
-const BRAND_TEAL = { r: 13, g: 93, b: 86, alpha: 1 };
-const BRAND_MIST = { r: 240, g: 247, b: 246, alpha: 1 };
-const WHITE = { r: 255, g: 255, b: 255, alpha: 1 };
-
-async function loadEmblem() {
-  const meta = await sharp(logoPath).metadata();
-  const emblemSize = meta.height ?? 183;
-
-  return sharp(logoPath)
-    .extract({
-      left: 0,
-      top: 0,
-      width: Math.min(emblemSize, meta.width ?? emblemSize),
-      height: emblemSize,
-    })
-    .png()
-    .toBuffer();
+function crc32(buf) {
+  let c = ~0;
+  for (let i = 0; i < buf.length; i++) {
+    c ^= buf[i];
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+  }
+  return ~c >>> 0;
 }
 
-async function loadWordmark() {
-  return sharp(logoPath).png().toBuffer();
+function pngChunk(type, data) {
+  const typeBuf = Buffer.from(type, "ascii");
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])));
+  return Buffer.concat([len, typeBuf, data, crc]);
 }
 
-async function composeIcon(size, graphic, options) {
-  const { background, paddingRatio, useWordmark = false } = options;
-  const pad = Math.round(size * paddingRatio);
-  const inner = size - pad * 2;
+function solidPng(size, rgb) {
+  const [r, g, b] = rgb;
+  const row = Buffer.alloc(1 + size * 3);
+  row[0] = 0;
+  for (let x = 0; x < size; x++) {
+    const i = 1 + x * 3;
+    row[i] = r;
+    row[i + 1] = g;
+    row[i + 2] = b;
+  }
+  const raw = Buffer.concat(Array.from({ length: size }, () => row));
+  const compressed = deflateSync(raw);
 
-  const resized = useWordmark
-    ? await sharp(graphic)
-        .resize(inner, inner, { fit: "inside", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-        .png()
-        .toBuffer()
-    : await sharp(graphic)
-        .resize(inner, inner, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-        .png()
-        .toBuffer();
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0);
+  ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
 
-  return sharp({
-    create: {
-      width: size,
-      height: size,
-      channels: 4,
-      background,
-    },
-  })
-    .composite([{ input: resized, gravity: "center" }])
-    .png()
-    .toBuffer();
+  return Buffer.concat([
+    signature,
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", compressed),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
 }
 
-async function main() {
-  const emblem = await loadEmblem();
-  const wordmark = await loadWordmark();
+const brandTeal = [13, 93, 86];
+const brandRed = [227, 30, 36];
 
-  const icon192 = await composeIcon(192, emblem, {
-    background: WHITE,
-    paddingRatio: 0.12,
-  });
-  const icon512 = await composeIcon(512, emblem, {
-    background: WHITE,
-    paddingRatio: 0.12,
-  });
-  const maskable512 = await composeIcon(512, emblem, {
-    background: BRAND_TEAL,
-    paddingRatio: 0.18,
-  });
-  const appleIcon = await composeIcon(180, emblem, {
-    background: BRAND_MIST,
-    paddingRatio: 0.14,
-  });
-  const appIcon = await composeIcon(256, emblem, {
-    background: WHITE,
-    paddingRatio: 0.12,
-  });
-
-  writeFileSync(join(iconsDir, "icon-192.png"), icon192);
-  writeFileSync(join(iconsDir, "icon-512.png"), icon512);
-  writeFileSync(join(iconsDir, "icon-maskable-512.png"), maskable512);
-  writeFileSync(join(iconsDir, "icon-wordmark-512.png"), await composeIcon(512, wordmark, {
-    background: WHITE,
-    paddingRatio: 0.1,
-    useWordmark: true,
-  }));
-  writeFileSync(join(appDir, "icon.png"), appIcon);
-  writeFileSync(join(appDir, "apple-icon.png"), appleIcon);
-
-  console.log("Generated PWA icons from public/svitech-logo.png");
+for (const size of [192, 512]) {
+  writeFileSync(join(outDir, `icon-${size}.png`), solidPng(size, brandTeal));
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+writeFileSync(join(outDir, "icon-maskable-512.png"), solidPng(512, brandRed));
+
+console.log("Generated PWA icons in public/icons/");

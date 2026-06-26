@@ -1,8 +1,8 @@
-const CACHE_VERSION = "ngo-hub-pwa-v2";
+const CACHE_VERSION = "ngo-hub-pwa-v1";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const OFFLINE_URL = "/offline";
 
-const PRECACHE_URLS = [OFFLINE_URL, "/icons/icon-192.png", "/icons/icon-512.png", "/svitech-logo.png"];
+const PRECACHE_URLS = [OFFLINE_URL, "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
