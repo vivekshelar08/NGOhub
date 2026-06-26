@@ -9,13 +9,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <div className="grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]">
       <LoginHero />
 
-      <div className="relative flex min-h-screen flex-col bg-gradient-to-br from-brand-mist via-white to-emerald-50/40">
+      <div className="relative flex min-h-screen flex-col bg-slate-50">
         <div
-          className="pointer-events-none absolute inset-0 bg-[url('/images/login-education.jpg')] bg-cover bg-center opacity-[0.06] lg:hidden"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-brand-saffron/5 via-transparent to-brand-emerald/10 lg:hidden"
+          className="pointer-events-none absolute inset-0 bg-[url('/images/login-education.jpg')] bg-cover bg-center opacity-[0.07] lg:hidden"
           aria-hidden
         />
 

@@ -3,18 +3,12 @@
 @tailwind utilities;
 
 :root {
-  --background: #fffbf5;
+  --background: #f8fafb;
   --foreground: #1a2332;
   --brand-red: #e31e24;
-  --brand-coral: #f97316;
-  --brand-saffron: #f59e0b;
-  --brand-saffron-light: #fcd34d;
-  --brand-emerald: #059669;
-  --brand-teal: #0d7c6e;
-  --brand-sky: #0ea5e9;
-  --brand-violet: #7c3aed;
+  --brand-teal: #0d5d56;
   --brand-blue: #0054a6;
-  --brand-mist: #fff7ed;
+  --brand-mist: #f0f7f6;
 }
 
 body {
@@ -33,7 +27,7 @@ body {
 @layer components {
   .page-shell {
     @apply min-h-full p-4 pb-20 sm:p-5 md:p-8 md:pb-8;
-    background: linear-gradient(to bottom right, var(--brand-mist), #ffffff, rgb(236 253 245));
+    background: linear-gradient(to bottom right, var(--brand-mist), #ffffff, rgb(248 250 252));
   }
 
   .page-card {
@@ -45,7 +39,7 @@ body {
   }
 
   .nav-link-active {
-    @apply bg-gradient-to-r from-brand-coral to-brand-red text-white shadow-md shadow-brand-coral/25;
+    @apply bg-brand-red text-white shadow-sm shadow-brand-red/20;
   }
 
   .nav-link-idle {
@@ -66,7 +60,7 @@ body {
   }
 
   .input-brand:focus {
-    border-color: var(--brand-emerald);
+    border-color: var(--brand-blue);
   }
 
   .table-shell {
@@ -94,7 +88,7 @@ body {
 
 @layer utilities {
   .text-gradient-brand {
-    @apply bg-gradient-to-r from-brand-saffron via-brand-emerald to-brand-sky bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-brand-teal via-brand-blue to-brand-red bg-clip-text text-transparent;
   }
 
   .scrollbar-none {

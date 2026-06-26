@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Quote } from "lucide-react";
-import { ACCENT_GRADIENT, INSPIRATIONAL_QUOTES } from "@/lib/inspirational-quotes";
+import { INSPIRATIONAL_QUOTES } from "@/lib/inspirational-quotes";
 import { cn } from "@/lib/utils";
 
 interface LoginQuoteSliderProps {
@@ -46,35 +46,28 @@ export function LoginQuoteSlider({
   }, [advance, autoAdvanceMs, paused]);
 
   const item = INSPIRATIONAL_QUOTES[index];
-  const gradient = ACCENT_GRADIENT[item.accent];
 
   if (variant === "compact") {
     return (
       <div
         className={cn(
-          "relative overflow-hidden rounded-2xl border border-white/60 bg-white/90 p-4 shadow-lg shadow-brand-coral/10 backdrop-blur-sm",
+          "rounded-xl border border-slate-200 bg-white p-4 shadow-sm",
           className
         )}
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
       >
-        <div className={cn("absolute inset-x-0 top-0 h-1 bg-gradient-to-r", gradient)} aria-hidden />
         <div className="flex items-start gap-3">
-          <span
-            className={cn(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm",
-              gradient
-            )}
-          >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-mist text-brand-teal">
             <Quote className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium leading-snug text-brand-ink">&ldquo;{item.quote}&rdquo;</p>
-            <p className="mt-2 text-xs font-bold text-brand-emerald">{item.author}</p>
+            <p className="text-sm leading-snug text-slate-700">&ldquo;{item.quote}&rdquo;</p>
+            <p className="mt-2 text-xs font-semibold text-brand-ink">{item.author}</p>
             <p className="text-[10px] uppercase tracking-wide text-slate-400">{item.title}</p>
           </div>
         </div>
-        <SliderControls index={index} gradient={gradient} onDot={setIndex} onPrev={() => advance(-1)} onNext={() => advance(1)} />
+        <SliderControls index={index} onDot={setIndex} onPrev={() => advance(-1)} onNext={() => advance(1)} />
       </div>
     );
   }
@@ -85,17 +78,16 @@ export function LoginQuoteSlider({
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      <div className="relative rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
-        <Quote className="mb-3 h-8 w-8 text-brand-saffron-light/60" />
-        <p className="text-lg font-medium leading-relaxed text-white">&ldquo;{item.quote}&rdquo;</p>
+      <div className="rounded-xl border border-white/15 bg-black/25 p-6">
+        <Quote className="mb-3 h-7 w-7 text-white/40" />
+        <p className="text-lg leading-relaxed text-white">&ldquo;{item.quote}&rdquo;</p>
         <div className="mt-5 border-t border-white/15 pt-4">
-          <p className="text-base font-bold text-white">{item.author}</p>
-          <p className="text-xs uppercase tracking-[0.2em] text-white/60">{item.title}</p>
+          <p className="text-base font-semibold text-white">{item.author}</p>
+          <p className="text-xs uppercase tracking-[0.15em] text-white/55">{item.title}</p>
         </div>
       </div>
       <SliderControls
         index={index}
-        gradient={gradient}
         onDot={setIndex}
         onPrev={() => advance(-1)}
         onNext={() => advance(1)}
@@ -107,14 +99,12 @@ export function LoginQuoteSlider({
 
 function SliderControls({
   index,
-  gradient,
   onDot,
   onPrev,
   onNext,
   light,
 }: {
   index: number;
-  gradient: string;
   onDot: (i: number) => void;
   onPrev: () => void;
   onNext: () => void;
@@ -132,10 +122,12 @@ function SliderControls({
             className={cn(
               "h-1.5 rounded-full transition-all",
               i === index
-                ? cn("w-6 bg-gradient-to-r", gradient, light && "w-8")
+                ? light
+                  ? "w-8 bg-white"
+                  : "w-6 bg-brand-teal"
                 : light
                   ? "w-3 bg-white/35 hover:bg-white/55"
-                  : "w-2 bg-slate-200"
+                  : "w-2 bg-slate-200 hover:bg-slate-300"
             )}
           />
         ))}
@@ -146,10 +138,9 @@ function SliderControls({
           aria-label="Previous quote"
           onClick={onPrev}
           className={cn(
-            "rounded-lg p-1",
             light
-              ? "rounded-full border border-white/25 p-2 text-white/80 hover:bg-white/10"
-              : "text-slate-400 hover:bg-slate-100 hover:text-brand-emerald"
+              ? "rounded-md border border-white/25 p-1.5 text-white/80 hover:bg-white/10"
+              : "rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-brand-teal"
           )}
         >
           <ChevronLeft className="h-4 w-4" />
@@ -159,10 +150,9 @@ function SliderControls({
           aria-label="Next quote"
           onClick={onNext}
           className={cn(
-            "rounded-lg p-1",
             light
-              ? "rounded-full border border-white/25 p-2 text-white/80 hover:bg-white/10"
-              : "text-slate-400 hover:bg-slate-100 hover:text-brand-emerald"
+              ? "rounded-md border border-white/25 p-1.5 text-white/80 hover:bg-white/10"
+              : "rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-brand-teal"
           )}
         >
           <ChevronRight className="h-4 w-4" />

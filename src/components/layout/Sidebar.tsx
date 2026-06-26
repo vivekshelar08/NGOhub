@@ -52,7 +52,7 @@ export function Sidebar({ user, badges = {}, mobileOpen = false, onMobileClose }
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-[17.5rem] shrink-0 flex-col border-r border-brand-ink-light bg-gradient-to-b from-brand-ink via-brand-emerald/90 to-brand-teal-dark text-white transition-transform duration-200 lg:static lg:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 flex w-[17.5rem] shrink-0 flex-col border-r border-brand-ink-light bg-gradient-to-b from-brand-ink via-brand-ink to-brand-teal-dark text-white transition-transform duration-200 lg:static lg:translate-x-0",
         mobileOpen ? "translate-x-0" : "-translate-x-full"
       )}
     >

@@ -13,12 +13,12 @@ export function Button({
 }: ButtonProps) {
   const variants = {
     primary:
-      "bg-gradient-to-r from-brand-coral to-brand-red text-white shadow-md shadow-brand-coral/30 hover:from-brand-red hover:to-brand-red-dark focus-visible:ring-brand-coral/40",
+      "bg-brand-red text-white shadow-sm shadow-brand-red/25 hover:bg-brand-red-dark focus-visible:ring-brand-red/40",
     secondary:
       "bg-brand-blue-light text-brand-blue hover:bg-brand-blue/10 focus-visible:ring-brand-blue/30",
     outline:
       "border-2 border-brand-teal bg-white text-brand-teal hover:bg-brand-mist focus-visible:ring-brand-teal/30",
-    teal: "bg-gradient-to-r from-brand-emerald to-brand-teal text-white shadow-md shadow-brand-emerald/25 hover:from-brand-teal-dark hover:to-brand-teal-dark focus-visible:ring-brand-emerald/40",
+    teal: "bg-brand-teal text-white shadow-sm shadow-brand-teal/20 hover:bg-brand-teal-dark focus-visible:ring-brand-teal/40",
     danger: "bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500/40",
     ghost: "bg-transparent text-slate-600 hover:bg-slate-100 focus-visible:ring-slate-300",
   };
