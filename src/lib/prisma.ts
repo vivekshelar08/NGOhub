@@ -36,6 +36,14 @@ function needsSsl(connectionString: string) {
   return true;
 }
 
+function getPoolMax(connectionString: string) {
+  const fromEnv = Number(process.env.DATABASE_POOL_MAX);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
+  if (isTransactionPooler(connectionString)) return 1;
+  if (isPoolerConnectionString(connectionString)) return 8;
+  return 10;
+}
+
 function getPool() {
   if (!globalForPrisma.pool) {
     const connectionString = getConnectionString();
@@ -56,7 +64,7 @@ function getPool() {
     globalForPrisma.pool = new Pool({
       connectionString,
       ssl: needsSsl(connectionString) ? { rejectUnauthorized: false } : undefined,
-      max: isPoolerConnectionString(connectionString) ? 1 : 3,
+      max: getPoolMax(connectionString),
       idleTimeoutMillis: 20_000,
       connectionTimeoutMillis: 8_000,
       allowExitOnIdle: false,
