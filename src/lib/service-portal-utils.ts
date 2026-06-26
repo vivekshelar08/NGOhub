@@ -1,4 +1,4 @@
-import { BeneficiaryCategory, ServiceDeliveryStatus } from "@/generated/prisma/enums";
+import { BeneficiaryCategory, BeneficiaryCohort, ServiceDeliveryStatus } from "@/generated/prisma/enums";
 
 export const DELIVERY_STATUS_LABELS: Record<ServiceDeliveryStatus, string> = {
   DATA_ENTERED: "Data Entered",
@@ -22,6 +22,24 @@ export const BENEFICIARY_CATEGORY_LABELS: Record<BeneficiaryCategory, string> = 
   EWS: "EWS",
   OTHER: "Other",
 };
+
+export const BENEFICIARY_COHORT_LABELS: Record<BeneficiaryCohort, string> = {
+  PWD: "Person with Disability (PwD)",
+  MIGRANT: "Migrant",
+  SINGLE_MOTHER: "Single Mother",
+  SANITATION_WORKER: "Sanitation Worker",
+  MINORITY: "Minority",
+  SENIOR_CITIZEN: "Senior Citizen",
+  TRANSGENDER: "Transgender",
+  WIDOW: "Widow",
+  ORPHAN: "Orphan",
+  TRIBAL: "Tribal",
+  OTHER: "Other",
+};
+
+export const BENEFICIARY_COHORT_OPTIONS = Object.entries(BENEFICIARY_COHORT_LABELS).map(
+  ([value, label]) => ({ value: value as BeneficiaryCohort, label })
+);
 
 export const RECHECK_WINDOW_DAYS = 5;
 

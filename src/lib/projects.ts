@@ -117,6 +117,14 @@ export interface ProjectStaffAssignment {
   teamMemberIds: string[];
 }
 
+/** How beneficiary totals are counted for reporting in this project. */
+export type BeneficiaryCountMode = "unique" | "per_entry";
+
+export const BENEFICIARY_COUNT_MODE_LABELS: Record<BeneficiaryCountMode, string> = {
+  unique: "Unique beneficiaries — one person counts once even with multiple services",
+  per_entry: "Per entry — each service or activity entry counts separately",
+};
+
 export interface ProjectSetup {
   /** Master activity & beneficiary totals — defined before milestones. */
   catalog: SetupCatalogItem[];
@@ -164,6 +172,8 @@ export interface ProjectProposal {
   adminOverheadAmount: number;
   /** Times proposal was reopened for editing after approval (max 2). */
   proposalEditCount?: number;
+  /** How to count beneficiaries in reports — unique person vs each data entry. */
+  beneficiaryCountMode?: BeneficiaryCountMode;
   setup?: ProjectSetup;
   /** Theory of Change — optional M&E layer (does not change approval flow). */
   theoryOfChange?: {
@@ -549,6 +559,7 @@ function normalizeProject(raw: ProjectProposal): ProjectProposal {
     adminOverheadPercent,
     adminOverheadAmount: raw.adminOverheadAmount ?? totals.adminOverhead,
     proposalEditCount: raw.proposalEditCount ?? 0,
+    beneficiaryCountMode: raw.beneficiaryCountMode ?? "unique",
     totalEvaluation: totals.totalEvaluation,
     setup: cloneSetup(raw.setup),
     status: raw.status ?? "DRAFT",
@@ -584,6 +595,7 @@ export function createEmptyProject(id: string): ProjectProposal {
     adminOverheadPercent: DEFAULT_ADMIN_OVERHEAD_PERCENT,
     adminOverheadAmount: 0,
     totalEvaluation: 0,
+    beneficiaryCountMode: "unique",
     createdAt: now,
     updatedAt: now,
   };

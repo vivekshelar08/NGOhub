@@ -88,6 +88,40 @@ npm run check:supabase
 
 Health endpoint after deploy: `GET /api/health`
 
+## Progressive Web App (PWA)
+
+NGO Hub can be installed on phones and tablets from the browser.
+
+### What is included
+
+- Web app manifest (`/manifest.webmanifest`) — home screen install, standalone mode
+- Service worker (`/sw.js`) — caches static assets and shows `/offline` when navigation fails
+- Install prompt on supported browsers (Chrome, Edge, Android)
+- Works with the existing offline queue for field data sync
+
+### Install on a phone
+
+**Android (Chrome):** Open your deployed site → menu → **Install app** (or use the in-app install banner).
+
+**iPhone (Safari):** Open the site → Share → **Add to Home Screen**.
+
+### Local PWA testing
+
+Service workers require HTTPS or `localhost`:
+
+```bash
+npm run dev
+# open http://localhost:3000
+```
+
+Use Chrome DevTools → **Application** → **Manifest** / **Service Workers** to verify registration.
+
+### Production requirements
+
+- Site must be served over **HTTPS**
+- `NEXT_PUBLIC_APP_URL` must match your public domain
+- Deploy a fresh build after PWA changes so `/sw.js` updates on users' devices
+
 ### Required environment variables
 
 | Variable | Description |

@@ -29,8 +29,11 @@ import {
 } from "@/lib/achievements";
 import { BeneficiaryExportRow } from "@/lib/beneficiaryExport";
 import { MeetingExportRow } from "@/lib/meetingExport";
-import { BENEFICIARY_CATEGORY_LABELS } from "@/lib/service-portal-utils";
+import { BENEFICIARY_CATEGORY_LABELS, BENEFICIARY_COHORT_LABELS } from "@/lib/service-portal-utils";
 import { BeneficiaryCategory } from "@/generated/prisma/enums";
+import { computeCohortReport, exportCohortReportExcel } from "@/lib/cohortReport";
+import { Button } from "@/components/ui/Button";
+import { FileSpreadsheet } from "lucide-react";
 import {
   CHART_COLORS,
   DASHBOARD_VIEWS,
@@ -45,6 +48,8 @@ interface ReportDashboardChartsProps {
   achievementOverview: AchievementOverview;
   beneficiaries: BeneficiaryExportRow[];
   meetings: MeetingExportRow[];
+  canExport?: boolean;
+  projectTitles?: Map<string, string>;
 }
 
 function countByLabel<T extends string>(
@@ -108,6 +113,8 @@ export function ReportDashboardCharts({
   achievementOverview,
   beneficiaries,
   meetings,
+  canExport = false,
+  projectTitles = new Map(),
 }: ReportDashboardChartsProps) {
   const statusData = useMemo(
     () => countByLabel(activities.map((a) => a.status), TASK_STATUS_LABELS as Record<string, string>),
@@ -127,6 +134,16 @@ export function ReportDashboardCharts({
     }
     return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
   }, [beneficiaries]);
+
+  const cohortReport = useMemo(
+    () => computeCohortReport(beneficiaries, projectTitles),
+    [beneficiaries, projectTitles]
+  );
+
+  const cohortChartData = useMemo(
+    () => cohortReport.byCohort.map((row) => ({ name: row.label, value: row.count })),
+    [cohortReport.byCohort]
+  );
 
   const meetingStatusData = useMemo(() => {
     const map = new Map<string, number>();
@@ -312,6 +329,128 @@ export function ReportDashboardCharts({
               </ResponsiveContainer>
             </ChartCard>
           </div>
+        </div>
+      )}
+
+      {dashboardView === "cohorts" && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="grid flex-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard label="Total enrolled" value={cohortReport.totalBeneficiaries} />
+              <StatCard
+                label="Tagged with cohorts"
+                value={cohortReport.taggedBeneficiaries}
+                hint="PwD, migrant, minority, etc."
+              />
+              <StatCard label="Untagged" value={cohortReport.untaggedBeneficiaries} />
+              <StatCard
+                label="Multiple cohorts"
+                value={cohortReport.multiCohortBeneficiaries}
+                hint="Counted in each applicable group"
+              />
+            </div>
+            {canExport && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="gap-1.5 shrink-0"
+                disabled={cohortReport.taggedBeneficiaries === 0}
+                onClick={() => exportCohortReportExcel(cohortReport, beneficiaries, filterSummary)}
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Export cohort report
+              </Button>
+            )}
+          </div>
+
+          <p className="text-xs text-slate-500">
+            A beneficiary can have multiple cohort tags (e.g. PwD and migrant). Counts below are
+            tag occurrences, not unique persons per row unless only one tag is used.
+          </p>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ChartCard title="Beneficiaries by special group">
+              {cohortChartData.length === 0 ? (
+                <EmptyChart message="No cohort tags yet — add cohorts when registering beneficiaries" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={cohortChartData} layout="vertical" margin={{ left: 8, right: 16 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" allowDecimals={false} />
+                    <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+            <ChartCard title="Cohort breakdown table">
+              {cohortReport.byCohort.length === 0 ? (
+                <EmptyChart message="No cohort data for current filters" />
+              ) : (
+                <div className="h-full overflow-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
+                      <tr>
+                        <th className="py-2 pr-3 font-medium">Group</th>
+                        <th className="py-2 pr-3 font-medium text-right">Count</th>
+                        <th className="py-2 font-medium text-right">% tagged</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cohortReport.byCohort.map((row) => (
+                        <tr key={row.cohort} className="border-b border-slate-100">
+                          <td className="py-2.5 pr-3 font-medium text-slate-800">{row.label}</td>
+                          <td className="py-2.5 pr-3 text-right tabular-nums">{row.count}</td>
+                          <td className="py-2.5 text-right tabular-nums text-slate-500">
+                            {row.pctOfTagged}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </ChartCard>
+          </div>
+
+          {cohortReport.byProject.length > 0 && (
+            <Card className="overflow-hidden p-0">
+              <div className="border-b border-slate-200 px-4 py-3">
+                <CardTitle className="text-base">By project</CardTitle>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[36rem] text-left text-sm">
+                  <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Project</th>
+                      <th className="px-4 py-3 font-medium text-right">Total</th>
+                      <th className="px-4 py-3 font-medium text-right">Tagged</th>
+                      {cohortReport.byCohort.map((row) => (
+                        <th key={row.cohort} className="px-4 py-3 font-medium text-right">
+                          {row.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cohortReport.byProject.map((row) => (
+                      <tr key={row.projectId} className="border-b border-slate-100">
+                        <td className="px-4 py-2.5 font-medium text-slate-800">{row.projectTitle}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums">{row.total}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums">{row.tagged}</td>
+                        {cohortReport.byCohort.map((c) => (
+                          <td key={c.cohort} className="px-4 py-2.5 text-right tabular-nums">
+                            {row.byCohort[c.cohort] || "—"}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
         </div>
       )}
 

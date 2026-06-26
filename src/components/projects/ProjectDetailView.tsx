@@ -18,6 +18,8 @@ import {
   computeMilestoneBudgetAmount,
   computeBudgetTotals,
   budgetAdminInputFromProject,
+  BENEFICIARY_COUNT_MODE_LABELS,
+  BeneficiaryCountMode,
   canEditApprovedProposal,
   deleteProject,
   formatINR,
@@ -523,6 +525,47 @@ export function ProjectDetailView({
 
         {project.status === "APPROVED" && (
           <div className="lg:col-span-2 space-y-0">
+            {setupDone && (
+              <section className={cn("mb-6 rounded-xl border p-5", panel)}>
+                <h2 className={cn("text-lg font-semibold", titleText)}>Beneficiary counting</h2>
+                <p className={cn("mt-1 text-sm", muted)}>
+                  How this project counts beneficiaries in field work and reports.
+                </p>
+                <div className="mt-4 space-y-3">
+                  {(Object.keys(BENEFICIARY_COUNT_MODE_LABELS) as BeneficiaryCountMode[]).map(
+                    (mode) => (
+                      <label
+                        key={mode}
+                        className={cn(
+                          "flex cursor-pointer gap-3 rounded-lg border p-3 text-sm",
+                          (project.beneficiaryCountMode ?? "unique") === mode
+                            ? "border-brand-teal bg-brand-mist/30"
+                            : border
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="beneficiaryCountMode"
+                          className="mt-1"
+                          checked={(project.beneficiaryCountMode ?? "unique") === mode}
+                          disabled={!canReview}
+                          onChange={() => {
+                            if (!project || !canReview) return;
+                            setProject(upsertProject({ ...project, beneficiaryCountMode: mode }));
+                          }}
+                        />
+                        <span className={titleText}>{BENEFICIARY_COUNT_MODE_LABELS[mode]}</span>
+                      </label>
+                    )
+                  )}
+                </div>
+                {!canReview && (
+                  <p className={cn("mt-2 text-xs", muted)}>
+                    Contact an admin or project manager to change this setting.
+                  </p>
+                )}
+              </section>
+            )}
             <ProjectEnhancementsPanel projectId={project.id} project={project} />
             <ProjectStrategyPanel
               project={project}

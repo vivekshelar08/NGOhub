@@ -43,6 +43,7 @@ import {
 } from "@/lib/reportExport";
 import { ReportDashboardCharts } from "@/components/reports/ReportDashboardCharts";
 import { DashboardViewId } from "@/lib/report-dashboards";
+import { computeCohortReport, exportCohortReportExcel } from "@/lib/cohortReport";
 
 interface ReportsViewProps {
   canExport: boolean;
@@ -170,6 +171,11 @@ export function ReportsView({ canExport }: ReportsViewProps) {
       beneficiaries: activities.reduce((s, t) => s + getTaskBeneficiaryCount(t), 0),
     }),
     [activities]
+  );
+
+  const projectTitles = useMemo(
+    () => new Map(projects.map((p) => [p.id, p.title || "Untitled"])),
+    [projects]
   );
 
   const filterSummary = useMemo(() => {
@@ -587,6 +593,8 @@ export function ReportsView({ canExport }: ReportsViewProps) {
           achievementOverview={achievementOverview}
           beneficiaries={dashboardBeneficiaries}
           meetings={dashboardMeetings}
+          canExport={canExport}
+          projectTitles={projectTitles}
         />
       )}
 
@@ -637,6 +645,22 @@ export function ReportsView({ canExport }: ReportsViewProps) {
                   <Database className="h-4 w-4" />
                 )}
                 {exporting === "all" ? "Preparing…" : "Download all data (Excel workbook)"}
+              </Button>
+
+              <Button
+                variant="secondary"
+                className="gap-1.5"
+                disabled={dashboardBeneficiaries.filter((b) => (b.cohorts?.length ?? 0) > 0).length === 0}
+                onClick={() =>
+                  exportCohortReportExcel(
+                    computeCohortReport(dashboardBeneficiaries, projectTitles),
+                    dashboardBeneficiaries,
+                    filterSummary
+                  )
+                }
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Export special groups (cohorts) report
               </Button>
 
               <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">

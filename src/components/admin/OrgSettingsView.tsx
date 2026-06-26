@@ -7,6 +7,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
 import { PageHeader, PageShell } from "@/components/ui/PageHeader";
 import type { OrgSettingsData } from "@/lib/orgSettings";
+import { DataBackupPanel } from "@/components/admin/DataBackupPanel";
 
 export function OrgSettingsView() {
   const [settings, setSettings] = useState<OrgSettingsData | null>(null);
@@ -73,6 +74,8 @@ export function OrgSettingsView() {
         title="Organization settings"
         description="Legal details for receipts, UC exports, and notification channels."
       />
+
+      <DataBackupPanel />
 
       <form onSubmit={handleSave} className="space-y-6">
         <Card>

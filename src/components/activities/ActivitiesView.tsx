@@ -15,6 +15,7 @@ import { ActivityCalendarView } from "@/components/calendar/ActivityCalendarView
 import { AssignTaskForm } from "@/components/activities/AssignTaskForm";
 import { TaskExecutionPanel } from "@/components/activities/TaskExecutionPanel";
 import { Button } from "@/components/ui/Button";
+import { formatDateKey } from "@/lib/hr-utils";
 import { cn } from "@/lib/utils";
 import { Role } from "@/generated/prisma/enums";
 import {
@@ -60,10 +61,12 @@ export function ActivitiesView({
   const router = useRouter();
   const searchParams = useSearchParams();
   const defaultView: MainView =
-    !canViewTasks && canViewCalendar
-      ? "calendar"
-      : searchParams.get("view") === "calendar" && canViewCalendar
-        ? "calendar"
+    !canViewCalendar && canViewTasks
+      ? "tasks"
+      : canViewCalendar
+        ? searchParams.get("view") === "tasks" && canViewTasks
+          ? "tasks"
+          : "calendar"
         : "tasks";
 
   const [mainView, setMainView] = useState<MainView>(defaultView);
@@ -147,10 +150,29 @@ export function ActivitiesView({
       list = list.filter((t) => t.workType === workTypeFilter);
     }
 
-    return list.sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
+    return list.sort((a, b) => {
+      const dateA = (a.scheduledDate ?? a.rescheduledTo ?? a.createdAt).slice(0, 10);
+      const dateB = (b.scheduledDate ?? b.rescheduledTo ?? b.createdAt).slice(0, 10);
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+      return a.title.localeCompare(b.title);
+    });
   }, [tab, userId, userRole, canViewAll, tasks, search, statusFilter, workTypeFilter]);
+
+  const completedTasks = useMemo(
+    () => visibleTasks.filter((t) => t.status === "completed"),
+    [visibleTasks]
+  );
+
+  const tasksByDate = useMemo(() => {
+    const groups = new Map<string, ActivityTask[]>();
+    for (const task of visibleTasks) {
+      const dateKey = (task.scheduledDate ?? task.rescheduledTo ?? task.createdAt).slice(0, 10);
+      const list = groups.get(dateKey) ?? [];
+      list.push(task);
+      groups.set(dateKey, list);
+    }
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [visibleTasks]);
 
   const selectedTask = visibleTasks.find((t) => t.id === selectedTaskId) ??
     tasks.find((t) => t.id === selectedTaskId) ??
@@ -191,8 +213,8 @@ export function ActivitiesView({
   ];
 
   const mainViews: { id: MainView; label: string; icon: typeof ListTodo; show: boolean }[] = [
-    { id: "tasks", label: "Tasks", icon: ListTodo, show: canViewTasks },
     { id: "calendar", label: "Calendar", icon: CalendarDays, show: canViewCalendar },
+    { id: "tasks", label: "Tasks", icon: ListTodo, show: canViewTasks },
   ];
 
   return (
@@ -367,8 +389,9 @@ export function ActivitiesView({
                         variant="secondary"
                         size="sm"
                         className="gap-1.5"
-                        disabled={visibleTasks.length === 0}
-                        onClick={() => exportActivityTasksExcel(visibleTasks)}
+                        disabled={completedTasks.length === 0}
+                        onClick={() => exportActivityTasksExcel(completedTasks)}
+                        title={completedTasks.length === 0 ? "Export available after tasks are completed" : undefined}
                       >
                         <FileSpreadsheet className="h-4 w-4" />
                         Export activities
@@ -378,11 +401,12 @@ export function ActivitiesView({
                         variant="secondary"
                         size="sm"
                         className="gap-1.5"
-                        disabled={exporting || visibleTasks.length === 0}
+                        disabled={exporting || completedTasks.length === 0}
+                        title={completedTasks.length === 0 ? "Export available after tasks are completed" : undefined}
                         onClick={async () => {
                           setExporting(true);
                           try {
-                            await exportActivityBeneficiariesExcel(visibleTasks);
+                            await exportActivityBeneficiariesExcel(completedTasks);
                           } finally {
                             setExporting(false);
                           }
@@ -408,14 +432,28 @@ export function ActivitiesView({
                         )}
                       </div>
                     ) : (
-                      <div className="space-y-2">
-                        {visibleTasks.map((task) => (
-                          <TaskListCard
-                            key={task.id}
-                            task={task}
-                            selected={selectedTaskId === task.id}
-                            onClick={() => handleTaskSelect(task)}
-                          />
+                      <div className="space-y-4">
+                        {tasksByDate.map(([dateKey, dayTasks]) => (
+                          <div key={dateKey}>
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              {formatDateKey(dateKey, "en-IN", {
+                                weekday: "short",
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </p>
+                            <div className="space-y-2">
+                              {dayTasks.map((task) => (
+                                <TaskListCard
+                                  key={task.id}
+                                  task={task}
+                                  selected={selectedTaskId === task.id}
+                                  onClick={() => handleTaskSelect(task)}
+                                />
+                              ))}
+                            </div>
+                          </div>
                         ))}
                       </div>
                     )}

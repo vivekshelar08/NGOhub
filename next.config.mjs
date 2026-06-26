@@ -27,6 +27,13 @@ const nextConfig = {
         source: "/admin/:path*",
         headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }],
       },
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
     ];
   },
 };

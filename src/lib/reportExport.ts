@@ -27,6 +27,9 @@ import {
   ActivityWorkType,
   getTaskBeneficiaryCount,
 } from "@/lib/activities";
+import { computeCohortReport } from "@/lib/cohortReport";
+import { BENEFICIARY_COHORT_LABELS } from "@/lib/service-portal-utils";
+import { BeneficiaryCohort } from "@/generated/prisma/enums";
 
 export type ReportExportFormat = "excel" | "csv" | "pdf" | "word";
 
@@ -314,17 +317,34 @@ export async function exportAllFilteredData(ctx: ReportExportContext) {
   if (ctx.beneficiaries.length > 0) {
     sheets.push({
       name: "Beneficiaries",
-      headers: ["Code", "Name", "Category", "Mobile", "Location", "Urgent", "Services"],
+      headers: ["Code", "Name", "Category", "Cohorts", "Mobile", "Location", "Urgent", "Services"],
       rows: ctx.beneficiaries.map((b) => [
         b.beneficiaryCode,
         b.name,
         b.category,
+        (b.cohorts as BeneficiaryCohort[] | undefined)
+          ?.map((c) => BENEFICIARY_COHORT_LABELS[c])
+          .join(", ") ?? "",
         b.mobile ?? "",
         b.location ?? "",
         b.isUrgentCase ? "Yes" : "No",
         b.deliveries?.length ?? 0,
       ]),
     });
+
+    const cohortSummary = computeCohortReport(ctx.beneficiaries);
+    if (cohortSummary.byCohort.length > 0) {
+      sheets.push({
+        name: "Special Groups",
+        headers: ["Cohort", "Count", "% of tagged", "% of all"],
+        rows: cohortSummary.byCohort.map((row) => [
+          row.label,
+          row.count,
+          `${row.pctOfTagged}%`,
+          `${row.pctOfAll}%`,
+        ]),
+      });
+    }
   }
 
   if (ctx.activities.length > 0) {

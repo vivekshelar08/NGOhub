@@ -78,6 +78,26 @@ enum BeneficiaryCategory {
   OTHER
 }
 
+enum BeneficiaryCohort {
+  PWD
+  MIGRANT
+  SINGLE_MOTHER
+  SANITATION_WORKER
+  MINORITY
+  SENIOR_CITIZEN
+  TRANSGENDER
+  WIDOW
+  ORPHAN
+  TRIBAL
+  OTHER
+}
+
+enum CorrectionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum IdDocumentType {
   AADHAAR
   VOTER_ID
@@ -314,6 +334,10 @@ model User {
   vendorBillsCreated       VendorBill[]               @relation("VendorBillsCreated")
   vendorPaymentsRecorded   VendorPayment[]            @relation("VendorPaymentsRecorded")
   financeAuditLogs         FinanceAuditLog[]          @relation("FinanceAuditBy")
+  attendanceCorrections    AttendanceCorrectionRequest[] @relation("AttendanceCorrections")
+  attendanceReviews        AttendanceCorrectionRequest[] @relation("AttendanceCorrectionReviews")
+  profileChangeRequests    ProfileChangeRequest[]     @relation("ProfileChangeRequests")
+  profileChangeReviews     ProfileChangeRequest[]     @relation("ProfileChangeReviews")
 }
 
 model RefreshToken {
@@ -401,6 +425,44 @@ model AttendanceRecord {
   updatedAt DateTime         @updatedAt
 
   @@unique([userId, date])
+}
+
+model AttendanceCorrectionRequest {
+  id                 String                  @id @default(uuid())
+  userId             String
+  user               User                    @relation("AttendanceCorrections", fields: [userId], references: [id], onDelete: Cascade)
+  attendanceRecordId String?
+  date               DateTime                @db.Date
+  requestedPunchIn   DateTime?
+  requestedPunchOut  DateTime?
+  reason             String
+  status             CorrectionRequestStatus @default(PENDING)
+  reviewedById       String?
+  reviewedBy         User?                   @relation("AttendanceCorrectionReviews", fields: [reviewedById], references: [id])
+  reviewedAt         DateTime?
+  reviewNotes        String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  @@index([userId, status])
+  @@index([status])
+}
+
+model ProfileChangeRequest {
+  id           String                  @id @default(uuid())
+  userId       String
+  user         User                    @relation("ProfileChangeRequests", fields: [userId], references: [id], onDelete: Cascade)
+  changes      Json
+  reason       String?
+  status       CorrectionRequestStatus @default(PENDING)
+  reviewedById String?
+  reviewedBy   User?                   @relation("ProfileChangeReviews", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+  reviewNotes  String?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  @@index([userId, status])
 }
 
 model PayrollRun {
@@ -560,6 +622,8 @@ model Beneficiary {
   pincode         String?
   address         String?
   category        BeneficiaryCategory @default(GENERAL)
+  /** Special cohort tags for targeted reporting (PWD, migrant, etc.). */
+  cohorts         BeneficiaryCohort[] @default([])
   monthlyIncome   Decimal?            @db.Decimal(12, 2)
   familyMembers   Int?
   location        String?

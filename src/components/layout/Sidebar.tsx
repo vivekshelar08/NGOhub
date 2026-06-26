@@ -8,7 +8,6 @@ import {
   Wallet,
   ClipboardList,
   BarChart3,
-  LogOut,
   UserCircle,
   Users,
   UserCog,
@@ -18,12 +17,10 @@ import {
   HeartHandshake,
   X,
 } from "lucide-react";
-import { cn, getActiveNavHref, getFirstName } from "@/lib/utils";
+import { cn, getActiveNavHref } from "@/lib/utils";
 import { Role } from "@/generated/prisma/enums";
 import { getNavItemsForRole } from "@/lib/role-features";
-import { Badge } from "@/components/ui/Badge";
 import { AppLogo } from "@/components/layout/AppLogo";
-import { UserAvatar } from "@/components/layout/UserAvatar";
 import type { NavBadges } from "@/components/layout/DashboardShell";
 
 const NAV_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -51,11 +48,6 @@ interface SidebarProps {
 export function Sidebar({ user, badges = {}, mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const visible = getNavItemsForRole(user.role);
-
-  async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    window.location.assign("/login");
-  }
 
   const activeHref = getActiveNavHref(pathname, visible);
 
@@ -124,25 +116,6 @@ export function Sidebar({ user, badges = {}, mobileOpen = false, onMobileClose }
           );
         })}
       </nav>
-
-      <div className="border-t border-white/10 p-4">
-        <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
-          <UserAvatar name={user.name} size="md" className="ring-white/20" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">{getFirstName(user.name)}</p>
-            <div className="mt-1">
-              <Badge role={user.role} />
-            </div>
-          </div>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-white/10 px-3 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:border-brand-red/40 hover:bg-brand-red/10 hover:text-white"
-        >
-          <LogOut className="h-4 w-4" />
-          Sign out
-        </button>
-      </div>
     </aside>
   );
 }

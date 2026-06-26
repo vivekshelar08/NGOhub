@@ -173,6 +173,23 @@ export const beneficiarySchema = z.object({
   pincode: z.string().optional(),
   address: z.string().optional(),
   category: z.enum(["GENERAL", "SC", "ST", "OBC", "EWS", "OTHER"]).default("GENERAL"),
+  cohorts: z
+    .array(
+      z.enum([
+        "PWD",
+        "MIGRANT",
+        "SINGLE_MOTHER",
+        "SANITATION_WORKER",
+        "MINORITY",
+        "SENIOR_CITIZEN",
+        "TRANSGENDER",
+        "WIDOW",
+        "ORPHAN",
+        "TRIBAL",
+        "OTHER",
+      ])
+    )
+    .default([]),
   monthlyIncome: z.number().nonnegative().optional(),
   familyMembers: z.number().int().positive().optional(),
   location: z.string().optional(),

@@ -1,4 +1,4 @@
-export type DashboardViewId = "impact" | "beneficiaries" | "operations" | "donor";
+export type DashboardViewId = "impact" | "beneficiaries" | "cohorts" | "operations" | "donor";
 
 export interface DashboardViewDefinition {
   id: DashboardViewId;
@@ -16,6 +16,11 @@ export const DASHBOARD_VIEWS: DashboardViewDefinition[] = [
     id: "beneficiaries",
     label: "Beneficiary Analytics",
     description: "Category mix, urgent cases, and service enrollment",
+  },
+  {
+    id: "cohorts",
+    label: "Special Groups (Cohorts)",
+    description: "PwD, migrants, single mothers, sanitation workers, minorities, and other tagged groups",
   },
   {
     id: "operations",

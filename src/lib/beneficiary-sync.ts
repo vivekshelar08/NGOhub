@@ -30,6 +30,7 @@ function portalPayload(entry: BeneficiaryEntry, projectId: string) {
     address: entry.address || undefined,
     location: entry.location || undefined,
     category: toCategory(entry.category),
+    cohorts: entry.cohorts?.length ? entry.cohorts : undefined,
     monthlyIncome:
       entry.annualIncome != null ? Math.round(entry.annualIncome / 12) : undefined,
     familyMembers: entry.familyMembers,

@@ -1,6 +1,7 @@
-import { BeneficiaryCategory } from "@/generated/prisma/enums";
+import { BeneficiaryCategory, BeneficiaryCohort } from "@/generated/prisma/enums";
 import {
   BENEFICIARY_CATEGORY_LABELS,
+  BENEFICIARY_COHORT_LABELS,
   DELIVERY_STATUS_LABELS,
   formatCurrency,
 } from "@/lib/service-portal-utils";
@@ -22,6 +23,7 @@ export interface BeneficiaryExportRow {
   pincode: string | null;
   address: string | null;
   category: BeneficiaryCategory;
+  cohorts?: BeneficiaryCohort[];
   monthlyIncome: number | null;
   familyMembers: number | null;
   location: string | null;
@@ -56,6 +58,7 @@ const BENEFICIARY_HEADERS = [
   "Age",
   "Gender",
   "Category",
+  "Cohorts",
   "Location",
   "Address",
   "Pincode",
@@ -84,6 +87,9 @@ function beneficiaryToRow(b: BeneficiaryExportRow): (string | number | null)[] {
     b.age,
     b.gender,
     BENEFICIARY_CATEGORY_LABELS[b.category] ?? b.category,
+    (b.cohorts as BeneficiaryCohort[] | undefined)
+      ?.map((c) => BENEFICIARY_COHORT_LABELS[c])
+      .join(", ") ?? "",
     b.location,
     b.address,
     b.pincode,

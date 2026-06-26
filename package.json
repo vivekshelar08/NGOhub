@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "prisma generate && next dev",
-    "build": "prisma generate && next build",
+    "build": "node scripts/generate-pwa-icons.mjs && prisma generate && next build",
     "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "start:hostinger": "node scripts/start.mjs",
     "start:server": "node scripts/production-server.js",
@@ -23,7 +23,8 @@
     "check:database": "node scripts/check-database.js",
     "setup:production-db": "node scripts/setup-production-db.js",
     "print:production-env": "node scripts/print-production-env.js",
-    "check:supabase": "node scripts/check-supabase.js"
+    "check:supabase": "node scripts/check-supabase.js",
+    "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

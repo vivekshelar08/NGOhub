@@ -27,6 +27,7 @@ import {
   RATING_LABELS,
 } from "@/lib/hr-utils";
 import { EmployeeProfileForm, HrPolicySettingsForm } from "@/components/hr/HrForms";
+import { MyAttendancePanel } from "@/components/hr/MyAttendancePanel";
 import { LeaveManagementPanel } from "@/components/hr/LeaveManagementPanel";
 import { SalarySlipsPanel, downloadSalarySlipByLineId } from "@/components/hr/SalarySlipsPanel";
 import { HrCommandCenter } from "@/components/hr/HrCommandCenter";
@@ -119,7 +120,7 @@ export function HrManagementView({
   userName,
   canManageHr,
 }: HrManagementViewProps) {
-  const [tab, setTab] = useState<HrTab>(canManageHr ? "dashboard" : "leave");
+  const [tab, setTab] = useState<HrTab>(canManageHr ? "dashboard" : "attendance");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -492,7 +493,7 @@ export function HrManagementView({
 
   const tabs: { id: HrTab; label: string; icon: React.ReactNode; show: boolean }[] = [
     { id: "dashboard", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" />, show: canManageHr },
-    { id: "attendance", label: "Attendance", icon: <Clock className="h-4 w-4" />, show: canManageHr },
+    { id: "attendance", label: "Attendance", icon: <Clock className="h-4 w-4" />, show: true },
     { id: "leave", label: "Leave", icon: <Calendar className="h-4 w-4" />, show: true },
     { id: "salary_slips", label: "Salary", icon: <FileText className="h-4 w-4" />, show: !canManageHr },
     { id: "staff", label: "Staff", icon: <Users className="h-4 w-4" />, show: canManageHr },
@@ -514,7 +515,7 @@ export function HrManagementView({
         <p className="mt-1 text-sm text-slate-500">
           {canManageHr
             ? "Attendance, leave, payroll, and team management"
-            : "Your leave, salary slips, and ratings"}
+            : "Your attendance, leave, salary slips, and ratings"}
         </p>
       </div>
 
@@ -611,6 +612,10 @@ export function HrManagementView({
             </div>
           </Card>
         </div>
+      )}
+
+      {tab === "attendance" && !canManageHr && (
+        <MyAttendancePanel userId={userId} onFlash={flash} />
       )}
 
       {tab === "leave" && (

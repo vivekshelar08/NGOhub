@@ -5,9 +5,11 @@ import { Menu } from "lucide-react";
 import { Role } from "@/generated/prisma/enums";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { AppLogo } from "@/components/layout/AppLogo";
-import { UserGreeting } from "@/components/layout/UserAvatar";
+import { UserProfileMenu } from "@/components/layout/UserProfileMenu";
 import { HeaderActions } from "@/components/layout/HeaderActions";
 import { OfflineSyncBanner } from "@/components/layout/OfflineSyncBanner";
+import { BackupReminderBanner } from "@/components/layout/BackupReminderBanner";
+import { hasFeature } from "@/lib/role-features";
 
 interface DashboardShellProps {
   user: { name: string; email: string; role: Role };
@@ -82,14 +84,11 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             <HeaderActions variant="light" />
-            <UserGreeting
-              name={user.name}
-              avatarSize="sm"
-              nameClassName="hidden max-w-[5rem] truncate text-sm font-medium text-slate-700 sm:inline sm:max-w-none"
-            />
+            <UserProfileMenu user={user} />
           </div>
         </header>
 
+        <BackupReminderBanner showForAdmin={hasFeature(user.role, "admin.settings")} />
         <OfflineSyncBanner />
 
         <main className="flex-1 overflow-auto bg-gradient-to-br from-brand-mist via-white to-slate-50">

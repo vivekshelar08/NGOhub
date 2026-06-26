@@ -4,8 +4,10 @@ import {
   loadProjects,
   ProjectProposal,
   upsertProject,
+  type BeneficiaryCountMode,
 } from "@/lib/projects";
 import { projectSupportsActivities } from "@/lib/projectMeta";
+import { localDateKey } from "@/lib/hr-utils";
 
 export type ActivityWorkType = "office" | "project" | "workshop" | "other";
 export type ProjectActivitySubType = "group" | "one_on_one";
@@ -45,6 +47,8 @@ export interface BeneficiaryEntry {
   /** Linked service portal beneficiary id */
   portalBeneficiaryId?: string;
   beneficiaryCode?: string;
+  /** Special cohort tags (PWD, migrant, etc.) */
+  cohorts?: string[];
 }
 
 export interface FileAttachment {
@@ -192,10 +196,50 @@ export function getTaskBeneficiaryMode(
   return "count";
 }
 
+export function getProjectBeneficiaryCountMode(projectId: string): BeneficiaryCountMode {
+  const project = getProjectById(projectId);
+  return project?.beneficiaryCountMode ?? "unique";
+}
+
+export function validateActivityDate(scheduledDate?: string): { ok: boolean; message?: string } {
+  if (!scheduledDate) return { ok: true };
+  const taskDate = scheduledDate.slice(0, 10);
+  const today = localDateKey();
+  if (taskDate < today) {
+    return {
+      ok: false,
+      message:
+        "This activity was scheduled for an earlier date. Reschedule to today or contact your manager.",
+    };
+  }
+  if (taskDate > today) {
+    return {
+      ok: false,
+      message: "This activity is scheduled for a future date. You can only start on the scheduled day.",
+    };
+  }
+  return { ok: true };
+}
+
 export function getTaskBeneficiaryCount(task: ActivityTask): number {
   const mode = getTaskBeneficiaryMode(task);
   if (mode === "none") return 0;
-  if (mode === "list") return task.beneficiaries?.length ?? 0;
+  if (mode === "list") {
+    const entries = task.beneficiaries ?? [];
+    if (entries.length === 0) return 0;
+    const projectMode = getProjectBeneficiaryCountMode(task.projectId);
+    if (projectMode === "per_entry") return entries.length;
+    const unique = new Set<string>();
+    for (const b of entries) {
+      const key =
+        b.portalBeneficiaryId ||
+        (b.contact ? normalizeMobile(b.contact) : "") ||
+        b.beneficiaryCode ||
+        b.id;
+      if (key) unique.add(key);
+    }
+    return unique.size || entries.length;
+  }
   return task.beneficiaryCount ?? 0;
 }
 
@@ -336,6 +380,8 @@ export function getTasksForCoordinator(userId: string): ActivityTask[] {
 export function startTask(taskId: string): ActivityTask | null {
   const task = loadActivityTasks().find((t) => t.id === taskId);
   if (!task || task.status !== "assigned") return null;
+  const dateCheck = validateActivityDate(task.scheduledDate ?? task.rescheduledTo);
+  if (!dateCheck.ok) return null;
   return upsertActivityTask({
     ...task,
     status: "active",
@@ -385,6 +431,9 @@ export function completeTask(
 ): ActivityTask | null {
   const task = loadActivityTasks().find((t) => t.id === taskId);
   if (!task || task.status !== "active") return null;
+
+  const dateCheck = validateActivityDate(task.scheduledDate ?? task.rescheduledTo);
+  if (!dateCheck.ok) return null;
 
   const completed = upsertActivityTask({
     ...task,

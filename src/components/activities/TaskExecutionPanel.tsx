@@ -27,6 +27,7 @@ import {
   PROJECT_SUB_TYPE_LABELS,
   rescheduleTask,
   startTask,
+  validateActivityDate,
   WORK_TYPE_LABELS,
 } from "@/lib/activities";
 import { syncBeneficiariesToPortal } from "@/lib/beneficiary-sync";
@@ -98,6 +99,11 @@ export function TaskExecutionPanel({
   const labelClass = "mb-1 block text-sm font-medium text-slate-700";
 
   function handleStart() {
+    const dateCheck = validateActivityDate(task.scheduledDate ?? task.rescheduledTo);
+    if (!dateCheck.ok) {
+      setError(dateCheck.message ?? "Cannot start this activity today.");
+      return;
+    }
     setBusy(true);
     startTask(task.id);
     setBusy(false);
@@ -129,6 +135,12 @@ export function TaskExecutionPanel({
   async function handleComplete() {
     setError("");
 
+    const dateCheck = validateActivityDate(task.scheduledDate ?? task.rescheduledTo);
+    if (!dateCheck.ok) {
+      setError(dateCheck.message ?? "This activity can only be completed on its scheduled date.");
+      return;
+    }
+
     if (photos.length === 0) {
       setError("Upload at least one photo as activity evidence.");
       return;
@@ -154,7 +166,7 @@ export function TaskExecutionPanel({
           projectId: task.projectId,
           requireService,
         });
-        completeTask(task.id, {
+        const result = completeTask(task.id, {
           beneficiaries: synced,
           beneficiaryCount: synced.length,
           photoAttachments: photos,
@@ -162,6 +174,10 @@ export function TaskExecutionPanel({
           notes,
           ...evidence,
         });
+        if (!result) {
+          setError("This activity can only be completed on its scheduled date.");
+          return;
+        }
         onExitFocus?.();
         onUpdate();
       } catch (err) {
@@ -179,23 +195,33 @@ export function TaskExecutionPanel({
       }
       setBusy(true);
       const evidence = await captureFieldEvidence();
-      completeTask(task.id, {
+      const result = completeTask(task.id, {
         beneficiaryCount,
         photoAttachments: photos,
         pdfAttachments: pdfs,
         notes,
         ...evidence,
       });
+      if (!result) {
+        setError("This activity can only be completed on its scheduled date.");
+        setBusy(false);
+        return;
+      }
     } else {
       setBusy(true);
       const evidence = await captureFieldEvidence();
-      completeTask(task.id, {
+      const result = completeTask(task.id, {
         beneficiaryCount: 0,
         photoAttachments: photos,
         pdfAttachments: pdfs,
         notes,
         ...evidence,
       });
+      if (!result) {
+        setError("This activity can only be completed on its scheduled date.");
+        setBusy(false);
+        return;
+      }
     }
 
     setBusy(false);
@@ -255,16 +281,18 @@ export function TaskExecutionPanel({
             </span>
           </div>
         </div>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="gap-1.5 shrink-0"
-          onClick={() => exportActivityTaskExcel(task)}
-        >
-          <FileSpreadsheet className="h-4 w-4" />
-          Export Excel
-        </Button>
+        {task.status === "completed" && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="gap-1.5 shrink-0"
+            onClick={() => exportActivityTaskExcel(task)}
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            Export Excel
+          </Button>
+        )}
         {task.scheduledDate && (
           <p className="text-sm text-slate-500">
             Scheduled: {formatDateKey(task.scheduledDate.slice(0, 10))}

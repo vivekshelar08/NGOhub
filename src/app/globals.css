@@ -15,6 +15,15 @@ body {
   @apply bg-background text-foreground antialiased;
 }
 
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
 @layer components {
   .page-shell {
     @apply min-h-full p-4 pb-20 sm:p-5 md:p-8 md:pb-8;

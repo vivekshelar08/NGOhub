@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       where: {
         scheduledDate: { gte: fromDate, lte: toDate },
         ...(viewAll ? {} : { requestedById: currentUser.id }),
-        status: { in: ["PENDING", "APPROVED"] },
+        status: { in: ["APPROVED"] },
       },
       include: {
         requestedBy: { select: { name: true, department: true } },

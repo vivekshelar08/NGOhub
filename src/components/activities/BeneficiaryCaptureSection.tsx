@@ -11,8 +11,9 @@ import {
   normalizeMobile,
   PriorBeneficiaryMatch,
 } from "@/lib/activities";
+import { BeneficiaryCategory, BeneficiaryCohort } from "@/generated/prisma/enums";
+import { CohortMultiSelect } from "@/components/beneficiaries/CohortMultiSelect";
 import { BENEFICIARY_CATEGORY_LABELS } from "@/lib/service-portal-utils";
-import { BeneficiaryCategory } from "@/generated/prisma/enums";
 
 interface PortalBeneficiary {
   id: string;
@@ -23,6 +24,7 @@ interface PortalBeneficiary {
   mobile: string | null;
   address: string | null;
   category: BeneficiaryCategory;
+  cohorts?: BeneficiaryCohort[];
   monthlyIncome: number | null;
   familyMembers: number | null;
   location: string | null;
@@ -44,6 +46,7 @@ const EMPTY_FORM = (): BeneficiaryEntry => ({
   contact: "",
   gender: "",
   category: "GENERAL",
+  cohorts: [],
   address: "",
   location: "",
   notes: "",
@@ -65,6 +68,7 @@ function portalToEntry(b: PortalBeneficiary): BeneficiaryEntry {
     address: b.address ?? "",
     location: b.location ?? "",
     category: b.category,
+    cohorts: b.cohorts ?? [],
     annualIncome: b.monthlyIncome != null ? b.monthlyIncome * 12 : undefined,
     familyMembers: b.familyMembers ?? undefined,
     notes: b.notes ?? "",
@@ -454,6 +458,14 @@ export function BeneficiaryCaptureSection({
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelClass}>Cohorts (select all that apply)</label>
+                <CohortMultiSelect
+                  className="mt-1.5"
+                  value={(form.cohorts ?? []) as BeneficiaryCohort[]}
+                  onChange={(cohorts) => updateFormField("cohorts", cohorts)}
+                />
               </div>
               <div>
                 <label className={labelClass}>Annual income (₹)</label>

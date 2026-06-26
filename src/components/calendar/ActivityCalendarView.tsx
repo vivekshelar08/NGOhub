@@ -112,6 +112,7 @@ export function ActivityCalendarView({
   const [localTasksVersion, setLocalTasksVersion] = useState(0);
   const [userNames, setUserNames] = useState<Map<string, string>>(new Map());
   const [pendingRequests, setPendingRequests] = useState<ActivityRequest[]>([]);
+  const [myPendingRequests, setMyPendingRequests] = useState<ActivityRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -166,10 +167,13 @@ export function ActivityCalendarView({
     if (!calendarReady || year < 1970) return;
 
     setLoading(true);
-    const [eventsRes, pendingRes] = await Promise.all([
+    const [eventsRes, pendingRes, myPendingRes] = await Promise.all([
       fetch(`/api/calendar/events?from=${monthRange.from}&to=${monthRange.to}`),
       canApprove
         ? fetch("/api/calendar/requests?status=PENDING&all=1")
+        : Promise.resolve(null),
+      canRequest && !canApprove
+        ? fetch("/api/calendar/requests?status=PENDING")
         : Promise.resolve(null),
     ]);
 
@@ -186,8 +190,15 @@ export function ActivityCalendarView({
       setPendingRequests(data.requests ?? []);
     }
 
+    if (myPendingRes?.ok) {
+      const data = await myPendingRes.json();
+      setMyPendingRequests(data.requests ?? []);
+    } else {
+      setMyPendingRequests([]);
+    }
+
     setLoading(false);
-  }, [calendarReady, year, monthRange.from, monthRange.to, canApprove, showFlash]);
+  }, [calendarReady, year, monthRange.from, monthRange.to, canApprove, canRequest, showFlash]);
 
   useEffect(() => {
     void loadCalendar();
@@ -202,7 +213,10 @@ export function ActivityCalendarView({
   }, [localTasksVersion, monthRange.from, monthRange.to, userNames, userId, userRole, canViewAll]);
 
   const events = useMemo(
-    () => [...taskEvents, ...apiEvents],
+    () => [
+      ...taskEvents,
+      ...apiEvents.filter((e) => e.kind !== "request" || e.status === "APPROVED"),
+    ],
     [taskEvents, apiEvents]
   );
 
@@ -374,6 +388,7 @@ export function ActivityCalendarView({
           )
         )}
         {(event.kind === "task" || event.kind === "request") && (
+          event.kind === "request" || loadActivityTasks().find((t) => t.id === event.id)?.status === "completed" ? (
           <button
             type="button"
             onClick={() => {
@@ -389,6 +404,7 @@ export function ActivityCalendarView({
             <FileSpreadsheet className="h-3 w-3" />
             Export Excel
           </button>
+          ) : null
         )}
       </li>
     );
@@ -704,6 +720,26 @@ export function ActivityCalendarView({
                         Reject
                       </Button>
                     </div>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {canRequest && !canApprove && myPendingRequests.length > 0 && (
+            <Card>
+              <CardTitle className="text-base">Your pending activity requests</CardTitle>
+              <p className="mt-1 text-sm text-slate-500">
+                These appear on the calendar only after manager approval.
+              </p>
+              <ul className="mt-4 space-y-3">
+                {myPendingRequests.map((req) => (
+                  <li key={req.id} className="rounded-lg border border-amber-100 bg-amber-50/50 p-3">
+                    <p className="text-sm font-medium text-slate-900">{req.title}</p>
+                    <p className="text-xs text-slate-500">
+                      Scheduled {req.scheduledDate}
+                      {req.endDate ? ` → ${req.endDate}` : ""} · Awaiting approval
+                    </p>
                   </li>
                 ))}
               </ul>

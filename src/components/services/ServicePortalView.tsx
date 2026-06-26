@@ -22,11 +22,14 @@ import { Input, Label } from "@/components/ui/Input";
 import { cn } from "@/lib/utils";
 import {
   BeneficiaryCategory,
+  BeneficiaryCohort,
   Role,
   ServiceDeliveryStatus,
 } from "@/generated/prisma/enums";
+import { CohortMultiSelect } from "@/components/beneficiaries/CohortMultiSelect";
 import {
   BENEFICIARY_CATEGORY_LABELS,
+  BENEFICIARY_COHORT_LABELS,
   formatCurrency,
   isRecheckOverdue,
   RECHECK_WINDOW_DAYS,
@@ -115,6 +118,7 @@ interface BeneficiarySummary {
   pincode: string | null;
   address: string | null;
   category: BeneficiaryCategory;
+  cohorts?: BeneficiaryCohort[];
   monthlyIncome: number | null;
   familyMembers: number | null;
   location: string | null;
@@ -175,6 +179,7 @@ const EMPTY_FORM = {
   pincode: "",
   address: "",
   category: "GENERAL" as BeneficiaryCategory,
+  cohorts: [] as BeneficiaryCohort[],
   monthlyIncome: "",
   familyMembers: "",
   location: "",
@@ -237,6 +242,7 @@ export function ServicePortalView({
     age: "",
     gender: "",
     category: "GENERAL" as BeneficiaryCategory,
+    cohorts: [] as BeneficiaryCohort[],
     monthlyIncome: "",
     familyMembers: "",
     location: "",
@@ -379,6 +385,7 @@ export function ServicePortalView({
       age: b.age != null ? String(b.age) : "",
       gender: b.gender ?? "",
       category: b.category,
+      cohorts: b.cohorts ?? [],
       monthlyIncome: b.monthlyIncome != null ? String(b.monthlyIncome) : "",
       familyMembers: b.familyMembers != null ? String(b.familyMembers) : "",
       location: b.location ?? "",
@@ -407,6 +414,7 @@ export function ServicePortalView({
           age: editForm.age ? Number(editForm.age) : undefined,
           gender: editForm.gender || undefined,
           category: editForm.category,
+          cohorts: editForm.cohorts,
           monthlyIncome: editForm.monthlyIncome ? Number(editForm.monthlyIncome) : undefined,
           familyMembers: editForm.familyMembers ? Number(editForm.familyMembers) : undefined,
           location: editForm.location || undefined,
@@ -482,6 +490,7 @@ export function ServicePortalView({
           pincode: form.pincode || undefined,
           address: form.address || undefined,
           category: form.category,
+          cohorts: form.cohorts,
           monthlyIncome: form.monthlyIncome ? Number(form.monthlyIncome) : undefined,
           familyMembers: form.familyMembers ? Number(form.familyMembers) : undefined,
           location: form.location || undefined,
@@ -1081,6 +1090,17 @@ export function ServicePortalView({
                     ))}
                   </select>
                 </div>
+                <div className="sm:col-span-2">
+                  <Label>Cohorts (select all that apply)</Label>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    PwD, migrant, single mother, sanitation worker, minority, etc. — used in special reporting.
+                  </p>
+                  <CohortMultiSelect
+                    className="mt-2"
+                    value={form.cohorts}
+                    onChange={(cohorts) => setForm({ ...form, cohorts })}
+                  />
+                </div>
                 <div>
                   <Label>Monthly income (₹)</Label>
                   <Input type="number" min={0} className="mt-1.5" value={form.monthlyIncome} onChange={(e) => setForm({ ...form, monthlyIncome: e.target.value })} />
@@ -1346,6 +1366,14 @@ export function ServicePortalView({
                       {selectedBeneficiary.age && <p>Age: {selectedBeneficiary.age}</p>}
                       {selectedBeneficiary.gender && <p>Gender: {selectedBeneficiary.gender}</p>}
                       <p>Category: {BENEFICIARY_CATEGORY_LABELS[selectedBeneficiary.category]}</p>
+                      {(selectedBeneficiary.cohorts?.length ?? 0) > 0 && (
+                        <p className="sm:col-span-2">
+                          Cohorts:{" "}
+                          {selectedBeneficiary.cohorts!
+                            .map((c) => BENEFICIARY_COHORT_LABELS[c])
+                            .join(", ")}
+                        </p>
+                      )}
                       <p>Income: {formatCurrency(selectedBeneficiary.monthlyIncome)}/mo</p>
                       {selectedBeneficiary.familyMembers && (
                         <p>Family: {selectedBeneficiary.familyMembers} members</p>
@@ -1383,6 +1411,14 @@ export function ServicePortalView({
                           <option key={k} value={k}>{v}</option>
                         ))}
                       </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label>Cohorts</Label>
+                      <CohortMultiSelect
+                        className="mt-2"
+                        value={editForm.cohorts}
+                        onChange={(cohorts) => setEditForm({ ...editForm, cohorts })}
+                      />
                     </div>
                     <div>
                       <Label>Monthly Income (₹)</Label>
