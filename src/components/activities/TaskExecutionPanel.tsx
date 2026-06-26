@@ -417,6 +417,8 @@ export function TaskExecutionPanel({
                       )}
                       {b.annualIncome != null && ` · ₹${b.annualIncome.toLocaleString("en-IN")}/yr`}
                       {b.familyMembers != null && ` · ${b.familyMembers} family members`}
+                      {b.isUrgentCase && " · Urgent"}
+                      {b.isCaseStudy && " · Case study"}
                     </li>
                   ))}
                 </ul>

@@ -59,6 +59,19 @@ export async function syncBeneficiariesToPortal(
     }
 
     if (entry.portalBeneficiaryId) {
+      const flagRes = await fetch(`/api/beneficiaries/${entry.portalBeneficiaryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isUrgentCase: entry.isUrgentCase ?? false,
+          isCaseStudy: entry.isCaseStudy ?? false,
+        }),
+      });
+      if (!flagRes.ok) {
+        const data = await flagRes.json();
+        throw new Error(data.error ?? `Failed to update flags for ${entry.name}`);
+      }
+
       if (entry.serviceId) {
         const res = await fetch(`/api/beneficiaries/${entry.portalBeneficiaryId}`, {
           method: "POST",

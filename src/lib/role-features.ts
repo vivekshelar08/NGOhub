@@ -809,6 +809,7 @@ export function getNavModulesForRole(role: Role): AppModule[] {
 export function getNavItemsForRole(role: Role): NavItemForRole[] {
   return getNavModulesForRole(role)
     .filter((module) => role !== "HR" || module.id !== "hr")
+    .filter((module) => role !== "ADMIN" || module.id !== "admin")
     .map((module) => ({
       href: module.path!,
       label:

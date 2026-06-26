@@ -13,6 +13,7 @@ import {
   Plus,
   Search,
   Settings,
+  Trash2,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -688,8 +689,35 @@ export function ServicePortalView({
   }
 
   const activeServices = services.filter((s) => s.isActive);
+  const canDeleteBeneficiary = userRole === "ADMIN";
 
   const filteredBeneficiaries = beneficiaries;
+
+  async function handleDeleteBeneficiary(beneficiaryId: string, beneficiaryName: string) {
+    if (
+      !window.confirm(
+        `Permanently delete "${beneficiaryName}"? All service deliveries and follow-ups will be removed. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setLoading(true);
+    clearMessages();
+    try {
+      const res = await fetch(`/api/beneficiaries/${beneficiaryId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to delete beneficiary");
+      setSuccess(`Deleted ${beneficiaryName}`);
+      setSelectedBeneficiary(null);
+      setTab("beneficiaries");
+      await loadBeneficiaries(searchQuery || undefined, listProjectId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete beneficiary");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleToggleRemoved(beneficiaryId: string, nextRemoved: boolean) {
     setLoading(true);
@@ -1013,6 +1041,29 @@ export function ServicePortalView({
               </div>
             )}
 
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <label className="flex min-h-[44px] items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.isUrgentCase}
+                  onChange={(e) => setForm({ ...form, isUrgentCase: e.target.checked })}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                Urgent case
+              </label>
+              <label className="flex min-h-[44px] items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.isCaseStudy}
+                  onChange={(e) => setForm({ ...form, isCaseStudy: e.target.checked })}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                <BookOpen className="h-4 w-4 text-purple-500" />
+                Case study
+              </label>
+            </div>
+
             <button
               type="button"
               onClick={() => setShowMoreDetails((v) => !v)}
@@ -1121,28 +1172,6 @@ export function ServicePortalView({
                     value={form.notes}
                     onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   />
-                </div>
-                <div className="flex flex-col gap-3 sm:col-span-2 sm:flex-row sm:flex-wrap">
-                  <label className="flex min-h-[44px] items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={form.isUrgentCase}
-                      onChange={(e) => setForm({ ...form, isUrgentCase: e.target.checked })}
-                      className="h-4 w-4 rounded border-slate-300"
-                    />
-                    <AlertTriangle className="h-4 w-4 text-red-500" />
-                    Urgent case
-                  </label>
-                  <label className="flex min-h-[44px] items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={form.isCaseStudy}
-                      onChange={(e) => setForm({ ...form, isCaseStudy: e.target.checked })}
-                      className="h-4 w-4 rounded border-slate-300"
-                    />
-                    <BookOpen className="h-4 w-4 text-purple-500" />
-                    Case study
-                  </label>
                 </div>
               </div>
             )}
@@ -1470,6 +1499,20 @@ export function ServicePortalView({
                           }
                         >
                           {selectedBeneficiary.isRemoved ? "Restore" : "Mark removed"}
+                        </Button>
+                      )}
+                      {canDeleteBeneficiary && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={loading}
+                          className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                          onClick={() =>
+                            handleDeleteBeneficiary(selectedBeneficiary.id, selectedBeneficiary.name)
+                          }
+                        >
+                          <Trash2 className="mr-1.5 h-4 w-4" />
+                          Delete
                         </Button>
                       )}
                       <Button size="sm" variant="secondary" onClick={() => startEditProfile(selectedBeneficiary)}>

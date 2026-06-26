@@ -209,3 +209,23 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }
+
+export async function DELETE(_request: Request, { params }: RouteParams) {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const existing = await prisma.beneficiary.findUnique({
+    where: { id },
+    select: { id: true, name: true },
+  });
+  if (!existing) {
+    return NextResponse.json({ error: "Beneficiary not found" }, { status: 404 });
+  }
+
+  await prisma.beneficiary.delete({ where: { id } });
+
+  return NextResponse.json({ ok: true, name: existing.name });
+}

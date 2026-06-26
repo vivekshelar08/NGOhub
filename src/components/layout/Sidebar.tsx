@@ -11,7 +11,6 @@ import {
   UserCircle,
   Users,
   UserCog,
-  Shield,
   FileQuestion,
   Scale,
   HeartHandshake,
@@ -35,7 +34,6 @@ const NAV_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "/dashboard/compliance": Scale,
   "/dashboard/volunteers": HeartHandshake,
   "/admin/users": UserCog,
-  "/admin": Shield,
 };
 
 interface SidebarProps {

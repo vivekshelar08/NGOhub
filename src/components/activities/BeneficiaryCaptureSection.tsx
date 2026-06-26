@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, Search, UserPlus, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, BookOpen, Check, Search, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import {
@@ -29,6 +29,8 @@ interface PortalBeneficiary {
   familyMembers: number | null;
   location: string | null;
   notes: string | null;
+  isUrgentCase?: boolean;
+  isCaseStudy?: boolean;
 }
 
 interface BeneficiaryCaptureSectionProps {
@@ -47,6 +49,8 @@ const EMPTY_FORM = (): BeneficiaryEntry => ({
   gender: "",
   category: "GENERAL",
   cohorts: [],
+  isUrgentCase: false,
+  isCaseStudy: false,
   address: "",
   location: "",
   notes: "",
@@ -72,6 +76,8 @@ function portalToEntry(b: PortalBeneficiary): BeneficiaryEntry {
     annualIncome: b.monthlyIncome != null ? b.monthlyIncome * 12 : undefined,
     familyMembers: b.familyMembers ?? undefined,
     notes: b.notes ?? "",
+    isUrgentCase: b.isUrgentCase ?? false,
+    isCaseStudy: b.isCaseStudy ?? false,
   };
 }
 
@@ -275,6 +281,8 @@ export function BeneficiaryCaptureSection({
                   {ben.category && ` · ${BENEFICIARY_CATEGORY_LABELS[ben.category as BeneficiaryCategory] ?? ben.category}`}
                   {ben.annualIncome != null && ` · ₹${ben.annualIncome.toLocaleString("en-IN")}/yr`}
                   {ben.familyMembers != null && ` · ${ben.familyMembers} members`}
+                  {ben.isUrgentCase && " · Urgent"}
+                  {ben.isCaseStudy && " · Case study"}
                 </p>
               </div>
               <button
@@ -544,6 +552,28 @@ export function BeneficiaryCaptureSection({
                     No services in catalog. Ask a manager to add services in Service Portal.
                   </p>
                 ) : null}
+              </div>
+              <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row sm:flex-wrap">
+                <label className="flex min-h-[40px] items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={form.isUrgentCase ?? false}
+                    onChange={(e) => updateFormField("isUrgentCase", e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                  Urgent case
+                </label>
+                <label className="flex min-h-[40px] items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={form.isCaseStudy ?? false}
+                    onChange={(e) => updateFormField("isCaseStudy", e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  <BookOpen className="h-4 w-4 text-purple-500" />
+                  Case study
+                </label>
               </div>
               <div className="sm:col-span-2">
                 <label className={labelClass}>Notes</label>
