@@ -1,94 +1,59 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
-
-const slides = [
-  {
-    src: "/images/login-community.jpg",
-    title: "Community impact",
-    caption: "Empowering people through education, technology, and outreach.",
-  },
-  {
-    src: "/images/login-education.jpg",
-    title: "Education for all",
-    caption: "Building skills and opportunity in every community we serve.",
-  },
-  {
-    src: "/images/login-volunteers.jpg",
-    title: "Field action",
-    caption: "Coordinating programs that create lasting social change.",
-  },
-];
+import { LoginQuoteSlider } from "@/components/auth/LoginQuoteSlider";
+import { INSPIRATIONAL_QUOTES } from "@/lib/inspirational-quotes";
+import { AppLogo } from "@/components/layout/AppLogo";
 
 export function LoginHero() {
   const [index, setIndex] = useState(0);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setIndex((current) => (current + 1) % slides.length);
-    }, 6000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const slide = slides[index];
-
   return (
     <div className="relative hidden min-h-screen overflow-hidden lg:block">
-      {slides.map((item, i) => (
+      {INSPIRATIONAL_QUOTES.map((item, i) => (
         <Image
-          key={item.src}
-          src={item.src}
-          alt={item.title}
+          key={item.image ?? item.author}
+          src={item.image ?? "/images/login-community.jpg"}
+          alt=""
           fill
-          className={`object-cover transition-opacity duration-1000 ${
-            i === index ? "opacity-100" : "opacity-0"
+          className={`object-cover transition-all duration-1000 ${
+            i === index ? "opacity-100 scale-100" : "opacity-0 scale-105"
           }`}
           priority={i === 0}
           sizes="55vw"
         />
       ))}
 
-      <div className="absolute inset-0 bg-gradient-to-br from-brand-teal/90 via-brand-ink/90 to-brand-blue/80" />
+      <div className="absolute inset-0 bg-gradient-to-br from-brand-emerald/95 via-brand-ink/88 to-brand-violet/75" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-brand-saffron/20" />
 
       <div className="relative flex h-full flex-col justify-between p-10 xl:p-14">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
-            SVITECH Foundation
+          <AppLogo variant="auth" priority className="mb-8" />
+          <p className="text-xs font-bold uppercase tracking-[0.35em] text-brand-saffron-light">
+            Inspiring change together
           </p>
           <h2 className="mt-4 max-w-lg text-3xl font-bold leading-tight text-white xl:text-4xl">
-            NGO management for education, technology &amp; community
+            Every act of service writes a brighter chapter for our communities
           </h2>
+          <p className="mt-3 max-w-md text-sm leading-relaxed text-white/75">
+            NGO Hub helps your team turn compassion into measurable impact — from field visits to
+            finance, all in one place.
+          </p>
         </div>
 
         <div className="space-y-6">
-          <div className="max-w-md rounded-2xl border border-white/15 bg-white/10 p-6 backdrop-blur-md">
-            <p className="text-lg font-semibold text-white">{slide.title}</p>
-            <p className="mt-2 text-sm leading-relaxed text-white/85">{slide.caption}</p>
-          </div>
+          <LoginQuoteSlider variant="card" index={index} onIndexChange={setIndex} />
 
           <div className="flex flex-wrap gap-2">
-            {["Education", "Technology", "Community"].map((tag) => (
+            {["Hope", "Service", "Dignity", "Impact"].map((tag) => (
               <span
                 key={tag}
-                className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium text-white backdrop-blur-sm"
+                className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm"
               >
                 {tag}
               </span>
-            ))}
-          </div>
-
-          <div className="flex gap-2">
-            {slides.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                aria-label={`Show slide ${i + 1}`}
-                onClick={() => setIndex(i)}
-                className={`h-1.5 rounded-full transition-all ${
-                  i === index ? "w-8 bg-brand-red" : "w-3 bg-white/40 hover:bg-white/60"
-                }`}
-              />
             ))}
           </div>
         </div>

@@ -68,15 +68,19 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 shadow-xl shadow-slate-200/60 backdrop-blur-sm">
-      <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-6 py-5 text-center sm:px-8">
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Welcome back</h1>
-        <p className="mt-1.5 text-sm text-slate-500">Sign in to manage your NGO programs</p>
+    <div className="overflow-hidden rounded-2xl border border-brand-emerald/15 bg-white/95 shadow-xl shadow-brand-emerald/10 backdrop-blur-sm">
+      <div className="border-b border-brand-saffron/20 bg-gradient-to-r from-brand-mist via-white to-emerald-50/80 px-6 py-5 text-center sm:px-8">
+        <h1 className="text-xl font-bold tracking-tight text-brand-ink sm:text-2xl">
+          Welcome back
+        </h1>
+        <p className="mt-1.5 text-sm text-slate-600">
+          Sign in and keep building impact — one community at a time
+        </p>
 
         <div className="mt-4 flex items-center justify-center gap-6">
           {highlights.map(({ icon: Icon, label }) => (
             <div key={label} className="flex flex-col items-center gap-1">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-teal/10 text-brand-teal">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-emerald/15 to-brand-saffron/15 text-brand-emerald">
                 <Icon className="h-4 w-4" />
               </span>
               <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
@@ -129,7 +133,7 @@ export default function LoginPage() {
             <p className="mt-2 text-right">
               <Link
                 href="/forgot-password"
-                className="text-sm font-semibold text-brand-teal hover:text-brand-teal-dark hover:underline"
+                className="text-sm font-semibold text-brand-emerald hover:text-brand-teal-dark hover:underline"
               >
                 Forgot password?
               </Link>

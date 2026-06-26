@@ -7,9 +7,8 @@ interface AppLogoProps {
   className?: string;
   imageClassName?: string;
   priority?: boolean;
-  /** light = white card behind logo; plain = logo only (black bg in asset) */
-  variant?: "light" | "plain";
-  /** Smaller logo for mobile top bar */
+  /** light = white card; plain = logo only; auth = prominent on login */
+  variant?: "light" | "plain" | "auth";
   compact?: boolean;
 }
 
@@ -27,16 +26,27 @@ export function AppLogo({
         variant === "light" && "rounded-xl bg-white p-3 shadow-md ring-1 ring-slate-200/80",
         variant === "plain" && !compact && "overflow-hidden rounded-xl",
         variant === "plain" && compact && "overflow-hidden rounded-lg",
+        variant === "auth" &&
+          "relative rounded-2xl bg-white p-4 shadow-xl shadow-brand-emerald/20 ring-2 ring-brand-saffron/40",
         className
       )}
     >
+      {variant === "auth" && (
+        <div
+          className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-brand-saffron/10 via-transparent to-brand-emerald/10"
+          aria-hidden
+        />
+      )}
       <Image
         src="/svitech-logo.png"
         alt="SVITECH Foundation — Education, Technology, Community"
-        width={compact ? 120 : 320}
-        height={compact ? 33 : 88}
+        width={compact ? 120 : variant === "auth" ? 360 : 320}
+        height={compact ? 33 : variant === "auth" ? 99 : 88}
         className={cn(
-          compact ? "h-7 w-auto max-w-[7.5rem]" : "h-auto w-full max-w-[280px] sm:max-w-[320px]",
+          "relative",
+          compact && "h-7 w-auto max-w-[7.5rem]",
+          !compact && variant === "auth" && "h-auto w-full max-w-[300px] brightness-110 contrast-110 xl:max-w-[340px]",
+          !compact && variant !== "auth" && "h-auto w-full max-w-[280px] sm:max-w-[320px]",
           imageClassName
         )}
         priority={priority}
@@ -44,13 +54,26 @@ export function AppLogo({
     </div>
   );
 
+  const wrapped =
+    variant === "auth" ? (
+      <div className="relative inline-block">
+        <div
+          className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-brand-saffron via-brand-emerald to-brand-sky opacity-60 blur-sm"
+          aria-hidden
+        />
+        {logo}
+      </div>
+    ) : (
+      logo
+    );
+
   if (href) {
     return (
       <Link href={href} className="inline-block transition-opacity hover:opacity-90">
-        {logo}
+        {wrapped}
       </Link>
     );
   }
 
-  return logo;
+  return wrapped;
 }

@@ -91,7 +91,7 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
         <BackupReminderBanner showForAdmin={hasFeature(user.role, "admin.settings")} />
         <OfflineSyncBanner />
 
-        <main className="flex-1 overflow-auto bg-gradient-to-br from-brand-mist via-white to-slate-50">
+        <main className="flex-1 overflow-auto bg-gradient-to-br from-brand-mist via-white to-emerald-50/30">
           {children}
         </main>
       </div>
