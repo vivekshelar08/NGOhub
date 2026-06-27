@@ -11,12 +11,19 @@ const outDir = join(root, "public", "icons");
 /** Matches manifest background_color */
 const BACKGROUND = "#f8fafb";
 
-async function createIcon(size, logoScale) {
-  const maxLogoWidth = Math.round(size * logoScale);
-  const maxLogoHeight = Math.round(size * logoScale * 0.4);
+async function loadEmblem() {
+  const { height = 0 } = await sharp(source).metadata();
+  return sharp(source)
+    .extract({ left: 0, top: 0, width: height, height })
+    .trim()
+    .toBuffer();
+}
 
-  const logo = await sharp(source)
-    .resize({ width: maxLogoWidth, height: maxLogoHeight, fit: "inside" })
+async function createIcon(emblem, size, logoScale) {
+  const maxLogoSize = Math.round(size * logoScale);
+
+  const logo = await sharp(emblem)
+    .resize({ width: maxLogoSize, height: maxLogoSize, fit: "inside" })
     .toBuffer();
 
   const { width = 0, height = 0 } = await sharp(logo).metadata();
@@ -38,14 +45,16 @@ async function createIcon(size, logoScale) {
 
 mkdirSync(outDir, { recursive: true });
 
+const emblem = await loadEmblem();
+
 const [icon192, icon512, iconMaskable512] = await Promise.all([
-  createIcon(192, 0.9),
-  createIcon(512, 0.9),
-  createIcon(512, 0.72),
+  createIcon(emblem, 192, 0.78),
+  createIcon(emblem, 512, 0.78),
+  createIcon(emblem, 512, 0.62),
 ]);
 
 writeFileSync(join(outDir, "icon-192.png"), icon192);
 writeFileSync(join(outDir, "icon-512.png"), icon512);
 writeFileSync(join(outDir, "icon-maskable-512.png"), iconMaskable512);
 
-console.log("Generated PWA icons from public/svitech-logo.png");
+console.log("Generated emblem-only PWA icons from public/svitech-logo.png");
