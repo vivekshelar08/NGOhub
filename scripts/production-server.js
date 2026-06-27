@@ -22,7 +22,7 @@ app
         res.end("Internal Server Error");
       }
     }).listen(port, hostname, () => {
-      console.log(`NGO Hub ready on http://${hostname}:${port}`);
+      console.log(`Svitech HR ready on http://${hostname}:${port}`);
     });
   })
   .catch((error) => {

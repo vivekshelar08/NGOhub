@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "NGO Hub — SVITECH Foundation",
-    short_name: "NGO Hub",
-    description: "NGO Management Platform — Education, Technology, Community",
+    name: "Svitech HR — SVITECH Foundation",
+    short_name: "Svitech HR",
+    description: "HR and operations platform — SVITECH Foundation",
     start_url: "/dashboard",
     scope: "/",
     display: "standalone",

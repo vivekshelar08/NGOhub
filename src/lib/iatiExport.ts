@@ -1,6 +1,6 @@
 import { ProjectProposal } from "@/lib/projects";
 
-/** Minimal IATI Activity XML for donor transparency (simplified NGO Hub export). */
+/** Minimal IATI Activity XML for donor transparency (simplified Svitech HR export). */
 export function generateIatiActivityXml(project: ProjectProposal, orgName: string): string {
   const esc = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

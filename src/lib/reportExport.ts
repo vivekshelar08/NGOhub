@@ -146,7 +146,7 @@ export async function exportReportSummaryWord(ctx: ReportExportContext) {
       {
         children: [
           new Paragraph({
-            text: "NGO Hub Report Summary",
+            text: "Svitech HR Report Summary",
             heading: HeadingLevel.HEADING_1,
           }),
           ...filterSummaryLines(ctx).map(

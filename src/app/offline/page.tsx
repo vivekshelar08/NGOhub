@@ -13,7 +13,7 @@ export default function OfflinePage() {
         </div>
         <h1 className="text-xl font-semibold text-slate-900">You are offline</h1>
         <p className="mt-2 text-sm text-slate-600">
-          NGO Hub needs a connection to load new pages. Your pending field data is still saved locally and
+          Svitech HR needs a connection to load new pages. Your pending field data is still saved locally and
           will sync when you are back online.
         </p>
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">

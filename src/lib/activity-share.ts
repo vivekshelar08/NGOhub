@@ -119,7 +119,7 @@ export function buildSingleTaskShareMessage(
     `📍 Location: ${place}`,
     task.notes?.trim() ? `\n📝 ${task.notes.trim()}` : null,
     ``,
-    `_Shared from NGO Hub field work_`,
+    `_Shared from Svitech HR field work_`,
   ];
 
   return lines.filter(Boolean).join("\n");
@@ -167,7 +167,7 @@ export function buildTodaysActivityShareMessage(
     ].filter(Boolean);
   });
 
-  return [...header, ...body, `_Shared from NGO Hub field work_`].join("\n");
+  return [...header, ...body, `_Shared from Svitech HR field work_`].join("\n");
 }
 
 export function shareViaWhatsApp(message: string): void {

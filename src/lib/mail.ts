@@ -64,7 +64,7 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
 
   const transport = await getTransport();
   await transport.sendMail({
-    from: `"NGO Hub" <${config.from}>`,
+    from: `"Svitech HR" <${config.from}>`,
     to: input.to,
     subject: input.subject,
     text: input.text,
@@ -81,7 +81,7 @@ export function buildPasswordResetEmail(params: {
   const text = [
     `Hi ${params.name},`,
     "",
-    "We received a request to reset your NGO Hub password.",
+    "We received a request to reset your Svitech HR password.",
     `Click the link below to choose a new password (valid for 1 hour):`,
     params.resetUrl,
     "",
@@ -92,7 +92,7 @@ export function buildPasswordResetEmail(params: {
 
   const html = `
     <p>Hi ${escapeHtml(params.name)},</p>
-    <p>We received a request to reset your NGO Hub password.</p>
+    <p>We received a request to reset your Svitech HR password.</p>
     <p><a href="${escapeHtml(params.resetUrl)}">Reset your password</a></p>
     <p style="color:#64748b;font-size:13px;">This link expires in 1 hour. If you did not request this, ignore this email.</p>
     <p>— ${escapeHtml(params.orgName)}</p>

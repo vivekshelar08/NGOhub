@@ -35,7 +35,7 @@ export async function POST(request: Request) {
         await queueNotification({
           channel: "email",
           recipient: adminEmail,
-          subject: `[NGO Hub] Compliance due: ${item.title}`,
+          subject: `[Svitech HR] Compliance due: ${item.title}`,
           body: `${item.title} is due on ${item.dueDate.toISOString().slice(0, 10)}. Status: ${status}.`,
         });
         queued++;

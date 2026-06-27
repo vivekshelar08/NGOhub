@@ -1,4 +1,4 @@
-# NGO Hub
+# Svitech HR
 
 NGO Management Platform — built module by module.
 
@@ -90,7 +90,7 @@ Health endpoint after deploy: `GET /api/health`
 
 ## Progressive Web App (PWA)
 
-NGO Hub can be installed on phones and tablets from the browser.
+Svitech HR can be installed on phones and tablets from the browser.
 
 ### What is included
 

@@ -157,7 +157,7 @@ export default function LoginPage() {
             </p>
           )}
           <Button type="submit" className="w-full" size="lg" disabled={loading}>
-            {loading ? "Signing in..." : "Sign in to NGO Hub"}
+            {loading ? "Signing in..." : "Sign in to Svitech HR"}
           </Button>
         </form>
       </div>

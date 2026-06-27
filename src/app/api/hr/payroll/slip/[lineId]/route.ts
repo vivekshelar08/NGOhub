@@ -45,7 +45,7 @@ async function loadSlipForLine(lineId: string) {
     payrollLine: line,
     orgPayrollSettings: orgPolicy.payroll,
     attendanceRecords,
-    organizationName: process.env.NEXT_PUBLIC_ORG_NAME ?? "NGO Hub",
+    organizationName: process.env.NEXT_PUBLIC_ORG_NAME ?? "Svitech HR",
   });
 
   return { slip, userId: line.userId, payrollStatus: line.payrollRun.status };

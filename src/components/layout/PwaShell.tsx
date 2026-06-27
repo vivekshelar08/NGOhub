@@ -63,7 +63,7 @@ export function PwaShell() {
           <Download className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-slate-900">Install NGO Hub</p>
+          <p className="text-sm font-semibold text-slate-900">Install Svitech HR</p>
           <p className="mt-0.5 text-xs text-slate-600">
             Add to your home screen for quick field access, even with poor connectivity.
           </p>

@@ -27,7 +27,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <div className="w-full max-w-[420px]">{children}</div>
 
           <p className="mt-8 text-center text-xs text-slate-400">
-            © {new Date().getFullYear()} SVITECH Foundation · NGO Hub Platform
+            © {new Date().getFullYear()} SVITECH Foundation · Svitech HR
           </p>
         </div>
       </div>

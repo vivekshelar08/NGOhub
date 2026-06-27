@@ -77,7 +77,7 @@ export function Sidebar({ user, badges = {}, mobileOpen = false, onMobileClose }
           />
         </div>
         <p className="mt-2 text-center text-[10px] font-bold uppercase tracking-[0.25em] text-brand-teal-light/80">
-          NGO Hub
+          Svitech HR
         </p>
       </div>
 

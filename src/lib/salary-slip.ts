@@ -189,7 +189,7 @@ export function buildSalarySlipData(input: {
 
   return {
     slipNumber: `SLIP-${input.payrollRun.id.slice(0, 8).toUpperCase()}-${input.lineId.slice(0, 6).toUpperCase()}`,
-    organizationName: input.organizationName ?? "NGO Hub",
+    organizationName: input.organizationName ?? "Svitech HR",
     payPeriod: { start: periodStart, end: periodEnd },
     payDate: input.payrollRun.createdAt.toISOString().slice(0, 10),
     payrollStatus: input.payrollRun.status,

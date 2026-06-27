@@ -69,7 +69,7 @@ async function deliverNotification(
       const res = await fetch(webhook, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: recipient, subject: subject ?? "NGO Hub", body }),
+        body: JSON.stringify({ to: recipient, subject: subject ?? "Svitech HR", body }),
       });
       if (!res.ok) throw new Error("Email webhook failed");
       return;
@@ -78,7 +78,7 @@ async function deliverNotification(
     try {
       await sendEmail({
         to: recipient,
-        subject: subject ?? "NGO Hub",
+        subject: subject ?? "Svitech HR",
         text: body,
       });
       return;

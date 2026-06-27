@@ -4,12 +4,12 @@ import { StaleBuildRecovery } from "@/components/layout/StaleBuildRecovery";
 import { PwaShell } from "@/components/layout/PwaShell";
 
 export const metadata: Metadata = {
-  title: "SVITECH Foundation | NGO Hub",
-  description: "NGO Management Platform — Education, Technology, Community",
+  title: "SVITECH Foundation | Svitech HR",
+  description: "HR and operations platform for SVITECH Foundation",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "NGO Hub",
+    title: "Svitech HR",
   },
   formatDetection: {
     telephone: false,
