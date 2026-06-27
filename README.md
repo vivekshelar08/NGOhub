@@ -121,6 +121,7 @@ Use Chrome DevTools → **Application** → **Manifest** / **Service Workers** t
 - Site must be served over **HTTPS**
 - `NEXT_PUBLIC_APP_URL` must match your public domain
 - Deploy a fresh build after PWA changes so `/sw.js` updates on users' devices
+- After changing `public/svitech-logo.png`, run `npm run generate:pwa-icons` locally and commit the updated files in `public/icons/` (production build does not regenerate icons)
 
 ### Required environment variables
 
