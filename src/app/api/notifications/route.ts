@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { deliveryScopeOwnOnly } from "@/lib/delivery-permissions";
+import { hasFeature } from "@/lib/role-features";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -116,6 +117,20 @@ export async function POST() {
       `${dueCompliance} compliance item(s) due or overdue`,
       "/dashboard/compliance"
     );
+  }
+
+  if (hasFeature(user.role, "calendar.approve")) {
+    const pendingActivities = await prisma.activityRequest.count({
+      where: { status: "PENDING" },
+    });
+    if (pendingActivities > 0) {
+      await notifyOnce(
+        "calendar-requests",
+        "Activity requests to approve",
+        `${pendingActivities} staff activity request(s) waiting for approval`,
+        "/dashboard/activities?view=calendar"
+      );
+    }
   }
 
   return NextResponse.json({ synced: created.length });

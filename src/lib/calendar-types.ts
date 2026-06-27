@@ -15,7 +15,10 @@ export interface CalendarEvent {
   holidayType?: HolidayType;
   details?: string | null;
   requestedBy?: string;
+  requestedById?: string;
   assignedTo?: string;
+  assignedToUserId?: string;
+  isMine?: boolean;
   projectTitle?: string;
   department?: string | null;
 }

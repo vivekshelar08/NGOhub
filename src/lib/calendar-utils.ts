@@ -49,6 +49,7 @@ export function taskToCalendarEvent(
     details: task.description ?? undefined,
     projectTitle: task.projectTitle,
     assignedTo: userNames.get(task.assignedToUserId),
+    assignedToUserId: task.assignedToUserId,
     department: undefined,
   };
 }

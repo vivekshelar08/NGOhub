@@ -4,6 +4,10 @@ import { parseDateOnly } from "@/lib/hr-utils";
 import { prisma } from "@/lib/prisma";
 import { hasFeature } from "@/lib/role-features";
 import { activityRequestActionSchema, activityRequestSchema } from "@/lib/validators";
+import {
+  notifyActivityRequestOutcome,
+  notifyCalendarApprovers,
+} from "@/lib/calendar-notifications";
 
 function serializeRequest(
   request: {
@@ -120,6 +124,17 @@ export async function POST(request: Request) {
     include: requestInclude,
   });
 
+  try {
+    await notifyCalendarApprovers(prisma, {
+      title: created.title,
+      requesterName: created.requestedBy.name,
+      scheduledDate: created.scheduledDate.toISOString().slice(0, 10),
+      excludeUserId: currentUser.id,
+    });
+  } catch (error) {
+    console.error("Activity request approver notification failed:", error);
+  }
+
   return NextResponse.json({ request: serializeRequest(created) }, { status: 201 });
 }
 
@@ -183,6 +198,18 @@ export async function PATCH(request: Request) {
     },
     include: requestInclude,
   });
+
+  try {
+    await notifyActivityRequestOutcome(prisma, {
+      requesterId: updated.requestedBy.id,
+      title: updated.title,
+      approved: parsed.data.action === "approve",
+      scheduledDate: updated.scheduledDate.toISOString().slice(0, 10),
+      reviewNotes: updated.reviewNotes,
+    });
+  } catch (error) {
+    console.error("Activity request outcome notification failed:", error);
+  }
 
   return NextResponse.json({ request: serializeRequest(updated) });
 }

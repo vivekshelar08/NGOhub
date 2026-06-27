@@ -26,22 +26,21 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Invalid date range" }, { status: 400 });
   }
 
-  const viewAll = hasFeature(currentUser.role, "calendar.approve");
+  const viewAllLeave = hasFeature(currentUser.role, "calendar.approve");
 
   const [holidays, activityRequests, leaveApplications] = await Promise.all([
     getIndianHolidaysInRange(from, to),
     prisma.activityRequest.findMany({
       where: {
         scheduledDate: { gte: fromDate, lte: toDate },
-        ...(viewAll ? {} : { requestedById: currentUser.id }),
-        status: { in: ["APPROVED"] },
+        status: "APPROVED",
       },
       include: {
-        requestedBy: { select: { name: true, department: true } },
+        requestedBy: { select: { id: true, name: true, department: true } },
       },
       orderBy: { scheduledDate: "asc" },
     }),
-    viewAll
+    viewAllLeave
       ? prisma.leaveApplication.findMany({
           where: {
             status: "APPROVED",
@@ -99,6 +98,7 @@ export async function GET(request: Request) {
       workType: activity.workType,
       details: activity.description,
       requestedBy: activity.requestedBy.name,
+      requestedById: activity.requestedBy.id,
       department: activity.requestedBy.department,
     });
   }

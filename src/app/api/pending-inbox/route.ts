@@ -105,7 +105,7 @@ export async function GET() {
         module: "Calendar",
         title: `Calendar request: ${r.title}`,
         subtitle: r.requestedBy.name,
-        href: "/dashboard/activities",
+        href: "/dashboard/activities?view=calendar",
         priority: "normal",
       });
     }

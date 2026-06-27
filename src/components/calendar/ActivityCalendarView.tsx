@@ -78,12 +78,28 @@ const KIND_CELL_STYLES: Record<CalendarEvent["kind"], string> = {
   leave: "bg-blue-500/15 text-blue-800 border-blue-200",
 };
 
+const MINE_CHIP = "ring-1 ring-brand-teal/40";
+const TEAM_CHIP = "ring-1 ring-violet-300/50 opacity-95";
+
 const KIND_LEGEND = [
-  { kind: "task" as const, label: "Assigned Activities", color: "bg-brand-mist" },
-  { kind: "request" as const, label: "Activity Requests", color: "bg-teal-500" },
-  { kind: "holiday" as const, label: "Holidays & Festivals", color: "bg-amber-400" },
-  { kind: "leave" as const, label: "Approved Leave", color: "bg-blue-400" },
+  { kind: "task" as const, label: "My assigned work", color: "bg-brand-mist", scope: "mine" as const },
+  { kind: "request" as const, label: "Team activities (approved)", color: "bg-violet-400", scope: "team" as const },
+  { kind: "holiday" as const, label: "Holidays & Festivals", color: "bg-amber-400", scope: "other" as const },
+  { kind: "leave" as const, label: "Approved Leave", color: "bg-blue-400", scope: "other" as const },
 ];
+
+function eventIsMine(event: CalendarEvent, userId: string): boolean {
+  if (event.kind === "task") return event.assignedToUserId === userId;
+  if (event.kind === "request") return event.requestedById === userId;
+  return false;
+}
+
+function enrichEvents(events: CalendarEvent[], userId: string): CalendarEvent[] {
+  return events.map((event) => ({
+    ...event,
+    isMine: eventIsMine(event, userId),
+  }));
+}
 
 function sortDayEvents(events: CalendarEvent[]) {
   const order: Record<CalendarEvent["kind"], number> = {
@@ -212,13 +228,13 @@ export function ActivityCalendarView({
     return tasksInDateRange(visible, monthRange.from, monthRange.to, userNames);
   }, [localTasksVersion, monthRange.from, monthRange.to, userNames, userId, userRole, canViewAll]);
 
-  const events = useMemo(
-    () => [
+  const events = useMemo(() => {
+    const merged = [
       ...taskEvents,
       ...apiEvents.filter((e) => e.kind !== "request" || e.status === "APPROVED"),
-    ],
-    [taskEvents, apiEvents]
-  );
+    ];
+    return enrichEvents(merged, userId);
+  }, [taskEvents, apiEvents, userId]);
 
   const eventsByDate = useMemo(() => groupEventsByDate(events), [events]);
 
@@ -281,7 +297,7 @@ export function ActivityCalendarView({
       return;
     }
 
-    showFlash("Activity request submitted for approval");
+    showFlash("Activity request submitted — approvers have been notified");
     setForm({ title: "", description: "", workType: "PROJECT", scheduledDate: "", endDate: "" });
     setShowForm(false);
     loadCalendar();
@@ -302,21 +318,43 @@ export function ActivityCalendarView({
       return;
     }
 
-    showFlash(action === "approve" ? "Request approved" : "Request rejected");
+    showFlash(action === "approve" ? "Approved — added to team calendar for everyone" : "Request rejected");
     loadCalendar();
   }
 
+  function eventChipClass(event: CalendarEvent): string {
+    if (event.kind === "task" || event.kind === "request") {
+      if (event.isMine) {
+        return event.kind === "task"
+          ? "bg-brand-teal/15 text-brand-teal-dark border-brand-teal/25"
+          : "bg-teal-500/15 text-teal-800 border-teal-200";
+      }
+      return "bg-violet-500/15 text-violet-800 border-violet-200";
+    }
+    return KIND_CELL_STYLES[event.kind];
+  }
+
   function renderEventChip(event: CalendarEvent, compact = false) {
+    const isActivity = event.kind === "task" || event.kind === "request";
+    const prefix =
+      isActivity && event.isMine === false
+        ? "Team · "
+        : isActivity && event.isMine
+          ? "My · "
+          : "";
+
     return (
       <div
         key={`${event.kind}-${event.id}`}
         className={cn(
           "truncate rounded border px-1 py-0.5 text-[10px] font-medium leading-tight",
-          KIND_CELL_STYLES[event.kind],
+          eventChipClass(event),
+          isActivity && (event.isMine ? MINE_CHIP : TEAM_CHIP),
           compact && "max-w-full"
         )}
-        title={event.title}
+        title={`${prefix}${event.title}`}
       >
+        {prefix}
         {event.title}
       </div>
     );
@@ -350,9 +388,17 @@ export function ActivityCalendarView({
         </div>
         {event.details && <p className="mt-1 text-xs text-slate-500">{event.details}</p>}
         {event.assignedTo && event.kind === "task" && (
-          <p className="mt-1 text-xs text-slate-400">Assigned to {event.assignedTo}</p>
+          <p className="mt-1 text-xs text-slate-400">
+            {event.isMine ? "Assigned to you" : `Assigned to ${event.assignedTo}`}
+          </p>
         )}
-        {event.requestedBy && event.kind !== "holiday" && event.kind !== "task" && (
+        {event.requestedBy && event.kind === "request" && (
+          <p className="mt-1 text-xs text-slate-400">
+            {event.isMine ? "Your approved activity" : `By ${event.requestedBy}`}
+            {event.department ? ` · ${event.department}` : ""}
+          </p>
+        )}
+        {event.requestedBy && event.kind === "leave" && (
           <p className="mt-1 text-xs text-slate-400">
             {event.requestedBy}
             {event.department ? ` · ${event.department}` : ""}
@@ -411,6 +457,8 @@ export function ActivityCalendarView({
   }
 
   const activityEvents = selectedEvents.filter((e) => e.kind === "task" || e.kind === "request");
+  const myWorkEvents = activityEvents.filter((e) => e.isMine);
+  const teamActivityEvents = activityEvents.filter((e) => !e.isMine);
   const otherEvents = selectedEvents.filter((e) => e.kind === "holiday" || e.kind === "leave");
 
   if (!calendarReady) {
@@ -433,7 +481,7 @@ export function ActivityCalendarView({
               <h1 className="text-2xl font-bold text-slate-900">Activity Calendar</h1>
             </div>
             <p className="mt-1 text-sm text-slate-500">
-              Activities organised date-wise with Indian holidays and team leave
+              Your assigned work, team-approved activities, holidays, and leave — all in one view
             </p>
           </div>
           {canRequest && (
@@ -666,13 +714,24 @@ export function ActivityCalendarView({
               <p className="mt-3 text-sm text-slate-500">No events on this day.</p>
             ) : (
               <div className="mt-4 space-y-5">
-                {activityEvents.length > 0 && (
+                {myWorkEvents.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-brand-teal-dark">
-                      Activities ({activityEvents.length})
+                      My work ({myWorkEvents.length})
                     </p>
-                    <ul className="mt-2 space-y-2">{activityEvents.map(renderEventDetail)}</ul>
+                    <ul className="mt-2 space-y-2">{myWorkEvents.map(renderEventDetail)}</ul>
                   </div>
+                )}
+                {teamActivityEvents.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">
+                      Team activities ({teamActivityEvents.length})
+                    </p>
+                    <ul className="mt-2 space-y-2">{teamActivityEvents.map(renderEventDetail)}</ul>
+                  </div>
+                )}
+                {activityEvents.length === 0 && (
+                  <p className="text-sm text-slate-500">No field work or team activities on this day.</p>
                 )}
                 {otherEvents.length > 0 && (
                   <div>
@@ -730,7 +789,7 @@ export function ActivityCalendarView({
             <Card>
               <CardTitle className="text-base">Your pending activity requests</CardTitle>
               <p className="mt-1 text-sm text-slate-500">
-                These appear on the calendar only after manager approval.
+                Visible on everyone&apos;s calendar once a manager approves it.
               </p>
               <ul className="mt-4 space-y-3">
                 {myPendingRequests.map((req) => (

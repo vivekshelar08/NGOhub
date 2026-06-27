@@ -132,6 +132,17 @@ export function AssignTaskForm({
       updatedAt: now,
     });
 
+    void fetch("/api/notifications/task-assigned", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        assigneeUserId: assignedToUserId,
+        title: title.trim(),
+        projectTitle: project.title,
+        scheduledDate: scheduledDate || undefined,
+      }),
+    }).catch(() => {});
+
     onAssigned();
   }
 
