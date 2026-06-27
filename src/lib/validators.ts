@@ -243,6 +243,15 @@ export const activityRequestActionSchema = z.object({
   reviewNotes: z.string().optional(),
 });
 
+export const activityRequestUpdateSchema = z.object({
+  title: z.string().min(2).optional(),
+  description: z.string().optional(),
+  workType: z.enum(["OFFICE", "PROJECT", "WORKSHOP", "OTHER"]).optional(),
+  scheduledDate: z.string().optional(),
+  endDate: z.string().optional().nullable(),
+  projectId: z.string().optional().nullable(),
+});
+
 const expenseAttachmentSchema = z.object({
   fileName: z.string().min(1),
   mimeType: z.string().min(1),

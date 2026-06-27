@@ -29,6 +29,8 @@ export default async function ActivitiesPage() {
 
   const canAssign = canViewTasks && hasFeature(user.role, "activities.assign");
   const canViewAll = user.role === "ADMIN" || user.role === "MANAGER";
+  const canManageActivities =
+    user.role === "ADMIN" || user.role === "MANAGER" || user.role === "COORDINATOR";
 
   return (
     <Suspense fallback={<ActivitiesLoading />}>
@@ -42,6 +44,7 @@ export default async function ActivitiesPage() {
         canViewCalendar={canViewCalendar}
         canRequest={hasFeature(user.role, "calendar.request")}
         canApprove={hasFeature(user.role, "calendar.approve")}
+        canManageActivities={canManageActivities}
       />
     </Suspense>
   );

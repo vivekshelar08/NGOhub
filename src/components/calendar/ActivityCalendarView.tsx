@@ -51,7 +51,9 @@ interface ActivityRequest {
   workType: CalendarWorkType;
   scheduledDate: string;
   endDate: string | null;
+  projectId: string | null;
   status: string;
+  requestedById?: string;
   requestedByName: string;
   department: string | null;
   reviewNotes: string | null;
@@ -63,10 +65,13 @@ interface ActivityCalendarViewProps {
   canViewAll: boolean;
   canRequest: boolean;
   canApprove: boolean;
+  canManage?: boolean;
   /** Hide page header when embedded in Activities hub */
   embedded?: boolean;
   /** Switch to task view and open a task (replaces external link) */
   onOpenTask?: (taskId: string) => void;
+  /** Approve redirects to assign task with request data pre-filled */
+  onApproveAndAssign?: (request: ActivityRequest) => void;
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -117,8 +122,10 @@ export function ActivityCalendarView({
   canViewAll,
   canRequest,
   canApprove,
+  canManage = false,
   embedded = false,
   onOpenTask,
+  onApproveAndAssign,
 }: ActivityCalendarViewProps) {
   const [year, setYear] = useState(0);
   const [month, setMonth] = useState(0);
@@ -134,6 +141,14 @@ export function ActivityCalendarView({
   const [showForm, setShowForm] = useState(false);
   const [flash, setFlash] = useState<{ msg: string; error?: boolean } | null>(null);
   const [form, setForm] = useState({
+    title: "",
+    description: "",
+    workType: "PROJECT" as CalendarWorkType,
+    scheduledDate: "",
+    endDate: "",
+  });
+  const [editingRequest, setEditingRequest] = useState<ActivityRequest | null>(null);
+  const [editForm, setEditForm] = useState({
     title: "",
     description: "",
     workType: "PROJECT" as CalendarWorkType,
@@ -303,7 +318,7 @@ export function ActivityCalendarView({
     loadCalendar();
   }
 
-  async function handleRequestAction(id: string, action: "approve" | "reject") {
+  async function handleRequestAction(id: string, action: "reject") {
     setSubmitting(true);
     const res = await fetch("/api/calendar/requests", {
       method: "PATCH",
@@ -318,7 +333,69 @@ export function ActivityCalendarView({
       return;
     }
 
-    showFlash(action === "approve" ? "Approved — added to team calendar for everyone" : "Request rejected");
+    showFlash("Request rejected");
+    loadCalendar();
+  }
+
+  function handleApprove(req: ActivityRequest) {
+    if (onApproveAndAssign) {
+      onApproveAndAssign(req);
+      return;
+    }
+    window.location.href = `/dashboard/activities?assignRequest=${req.id}`;
+  }
+
+  async function handleDeleteRequest(id: string, title: string) {
+    if (!window.confirm(`Delete activity request "${title}"?`)) return;
+    setSubmitting(true);
+    const res = await fetch(`/api/calendar/requests?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    setSubmitting(false);
+    if (!res.ok) {
+      const data = await res.json();
+      showFlash(data.error ?? "Delete failed", true);
+      return;
+    }
+    showFlash("Activity request deleted");
+    loadCalendar();
+  }
+
+  function openEditRequest(req: ActivityRequest) {
+    setEditingRequest(req);
+    setEditForm({
+      title: req.title,
+      description: req.description ?? "",
+      workType: req.workType,
+      scheduledDate: req.scheduledDate,
+      endDate: req.endDate ?? "",
+    });
+  }
+
+  async function saveEditRequest(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingRequest) return;
+    setSubmitting(true);
+    const res = await fetch("/api/calendar/requests", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: editingRequest.id,
+        title: editForm.title,
+        description: editForm.description || undefined,
+        workType: editForm.workType,
+        scheduledDate: editForm.scheduledDate,
+        endDate: editForm.endDate || null,
+      }),
+    });
+    setSubmitting(false);
+    if (!res.ok) {
+      const data = await res.json();
+      showFlash(data.error ?? "Update failed", true);
+      return;
+    }
+    showFlash("Activity request updated");
+    setEditingRequest(null);
     loadCalendar();
   }
 
@@ -451,6 +528,30 @@ export function ActivityCalendarView({
             Export Excel
           </button>
           ) : null
+        )}
+        {canManage && event.kind === "request" && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="text-xs font-medium text-brand-teal hover:underline"
+              onClick={() => {
+                void fetch(`/api/calendar/requests?id=${encodeURIComponent(event.id)}`)
+                  .then((r) => (r.ok ? r.json() : null))
+                  .then((data) => {
+                    if (data?.request) openEditRequest(data.request);
+                  });
+              }}
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              className="text-xs font-medium text-red-600 hover:underline"
+              onClick={() => handleDeleteRequest(event.id, event.title)}
+            >
+              Delete
+            </button>
+          </div>
         )}
       </li>
     );
@@ -762,13 +863,21 @@ export function ActivityCalendarView({
                     {req.description && (
                       <p className="mt-1 text-xs text-slate-500">{req.description}</p>
                     )}
-                    <div className="mt-3 flex gap-2">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       <Button
                         size="sm"
                         disabled={submitting}
-                        onClick={() => handleRequestAction(req.id, "approve")}
+                        onClick={() => handleApprove(req)}
                       >
                         Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={submitting}
+                        onClick={() => openEditRequest(req)}
+                      >
+                        Edit
                       </Button>
                       <Button
                         size="sm"
@@ -777,6 +886,14 @@ export function ActivityCalendarView({
                         onClick={() => handleRequestAction(req.id, "reject")}
                       >
                         Reject
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={submitting}
+                        onClick={() => handleDeleteRequest(req.id, req.title)}
+                      >
+                        Delete
                       </Button>
                     </div>
                   </li>
@@ -812,7 +929,7 @@ export function ActivityCalendarView({
           <Card className="w-full max-w-lg">
             <CardTitle>Request Activity / Task</CardTitle>
             <p className="mt-1 text-sm text-slate-500">
-              Submit a request for your coordinator or manager to approve.
+              Submit a request for your coordinator or manager to review. Anyone can request — approvers assign it to the right person.
             </p>
             <form onSubmit={submitRequest} className="mt-4 space-y-4">
               <div>
@@ -880,6 +997,81 @@ export function ActivityCalendarView({
                 </Button>
                 <Button type="submit" disabled={submitting}>
                   {submitting ? "Submitting…" : "Submit Request"}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
+
+      {editingRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <Card className="w-full max-w-lg">
+            <CardTitle>Edit activity request</CardTitle>
+            <form onSubmit={saveEditRequest} className="mt-4 space-y-4">
+              <div>
+                <Label htmlFor="edit-title">Title</Label>
+                <Input
+                  id="edit-title"
+                  required
+                  value={editForm.title}
+                  onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-workType">Work type</Label>
+                <select
+                  id="edit-workType"
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={editForm.workType}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, workType: e.target.value as CalendarWorkType }))
+                  }
+                >
+                  {Object.entries(WORK_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="edit-scheduledDate">Start date</Label>
+                  <Input
+                    id="edit-scheduledDate"
+                    type="date"
+                    required
+                    value={editForm.scheduledDate}
+                    onChange={(e) => setEditForm((f) => ({ ...f, scheduledDate: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-endDate">End date (optional)</Label>
+                  <Input
+                    id="edit-endDate"
+                    type="date"
+                    value={editForm.endDate}
+                    onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="edit-description">Description</Label>
+                <textarea
+                  id="edit-description"
+                  rows={3}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={editForm.description}
+                  onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="secondary" onClick={() => setEditingRequest(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={submitting}>
+                  Save changes
                 </Button>
               </div>
             </form>

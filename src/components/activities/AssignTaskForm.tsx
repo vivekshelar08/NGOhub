@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import {
   ActivitySource,
+  ActivityTask,
   ActivityWorkType,
   BeneficiaryMode,
   createTaskId,
@@ -15,6 +16,7 @@ import {
   WORK_TYPE_LABELS,
   PROJECT_SUB_TYPE_LABELS,
 } from "@/lib/activities";
+import { AssignTaskDraft } from "@/lib/activity-request-utils";
 import { ProjectProposal } from "@/lib/projects";
 
 interface AssignableUser {
@@ -28,21 +30,30 @@ interface AssignTaskFormProps {
   currentUserId: string;
   onAssigned: () => void;
   onCancel: () => void;
+  /** Pre-fill from an approved activity request flow */
+  draft?: AssignTaskDraft | null;
+  /** Edit an existing assigned task */
+  editTask?: ActivityTask | null;
 }
 
 export function AssignTaskForm({
   currentUserId,
   onAssigned,
   onCancel,
+  draft,
+  editTask,
 }: AssignTaskFormProps) {
   const projects = useMemo(() => getAssignableProjects(), []);
   const [users, setUsers] = useState<AssignableUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
 
+  const isEdit = Boolean(editTask);
+  const fromRequest = Boolean(draft?.activityRequestId);
+
   const [projectId, setProjectId] = useState("");
   const [workType, setWorkType] = useState<ActivityWorkType>("office");
   const [projectSubType, setProjectSubType] = useState<ProjectActivitySubType>("group");
-  const [source, setSource] = useState<ActivitySource>("milestone_kpi");
+  const [source, setSource] = useState<ActivitySource>("additional");
   const [milestoneId, setMilestoneId] = useState("");
   const [kpiId, setKpiId] = useState("");
   const [title, setTitle] = useState("");
@@ -51,6 +62,7 @@ export function AssignTaskForm({
   const [assignedToUserId, setAssignedToUserId] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const selectedProject = projects.find((p) => p.id === projectId);
 
@@ -64,6 +76,33 @@ export function AssignTaskForm({
       .catch(() => setLoadingUsers(false));
   }, []);
 
+  useEffect(() => {
+    if (editTask) {
+      setProjectId(editTask.projectId);
+      setWorkType(editTask.workType);
+      setProjectSubType(editTask.projectSubType ?? "group");
+      setSource(editTask.source);
+      setMilestoneId(editTask.milestoneId ?? "");
+      setKpiId(editTask.kpiId ?? "");
+      setTitle(editTask.title);
+      setDescription(editTask.description ?? "");
+      setBeneficiaryMode(editTask.beneficiaryMode);
+      setAssignedToUserId(editTask.assignedToUserId);
+      setScheduledDate(editTask.scheduledDate?.slice(0, 10) ?? "");
+      return;
+    }
+
+    if (draft) {
+      setTitle(draft.title);
+      setDescription(draft.description ?? "");
+      setWorkType(draft.workType);
+      setProjectId(draft.projectId ?? "");
+      setScheduledDate(draft.scheduledDate ?? "");
+      setAssignedToUserId(draft.assignedToUserId ?? "");
+      setBeneficiaryMode(draft.workType === "office" ? "none" : "count");
+    }
+  }, [draft, editTask]);
+
   const milestones = selectedProject?.setup?.milestones ?? [];
 
   const kpis = useMemo(() => {
@@ -73,11 +112,15 @@ export function AssignTaskForm({
   }, [selectedProject, milestoneId, milestones]);
 
   function handleProjectChange(id: string) {
+    const changed = id !== projectId;
     setProjectId(id);
-    setMilestoneId("");
-    setKpiId("");
-    const project = projects.find((p) => p.id === id);
-    if (project) setTitle("");
+    if (changed) {
+      setMilestoneId("");
+      setKpiId("");
+    }
+    if (!isEdit && !fromRequest && changed) {
+      setTitle("");
+    }
   }
 
   function handleKpiChange(id: string) {
@@ -89,7 +132,7 @@ export function AssignTaskForm({
     }
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
@@ -107,9 +150,14 @@ export function AssignTaskForm({
     const milestone = milestones.find((m) => m.id === milestoneId);
     const kpi = kpis.find((k) => k.id === kpiId);
 
+    setBusy(true);
     const now = new Date().toISOString();
+
     upsertActivityTask({
-      id: createTaskId(),
+      id: editTask?.id ?? createTaskId(),
+      activityCode: editTask?.activityCode,
+      activityKind: editTask?.activityKind,
+      projectCode: editTask?.projectCode,
       projectId,
       projectTitle: project.title,
       milestoneId: milestone?.id,
@@ -125,24 +173,52 @@ export function AssignTaskForm({
       requiresBeneficiaryList: beneficiaryMode === "list",
       beneficiaryMode,
       assignedToUserId,
-      assignedByUserId: currentUserId,
+      assignedByUserId: editTask?.assignedByUserId ?? currentUserId,
       scheduledDate: scheduledDate || undefined,
-      status: "assigned",
-      createdAt: now,
+      status: editTask?.status ?? "assigned",
+      startedAt: editTask?.startedAt,
+      completedAt: editTask?.completedAt,
+      beneficiaries: editTask?.beneficiaries,
+      beneficiaryCount: editTask?.beneficiaryCount,
+      photoAttachments: editTask?.photoAttachments,
+      pdfAttachments: editTask?.pdfAttachments,
+      notes: editTask?.notes,
+      createdAt: editTask?.createdAt ?? now,
       updatedAt: now,
     });
 
-    void fetch("/api/notifications/task-assigned", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        assigneeUserId: assignedToUserId,
-        title: title.trim(),
-        projectTitle: project.title,
-        scheduledDate: scheduledDate || undefined,
-      }),
-    }).catch(() => {});
+    if (!isEdit) {
+      void fetch("/api/notifications/task-assigned", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assigneeUserId: assignedToUserId,
+          title: title.trim(),
+          projectTitle: project.title,
+          scheduledDate: scheduledDate || undefined,
+        }),
+      }).catch(() => {});
+    }
 
+    if (draft?.activityRequestId) {
+      const approveRes = await fetch("/api/calendar/requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: draft.activityRequestId,
+          action: "approve",
+          reviewNotes: `Assigned to staff for field execution.`,
+        }),
+      });
+      if (!approveRes.ok) {
+        const data = await approveRes.json();
+        setError(data.error ?? "Task saved but request approval failed.");
+        setBusy(false);
+        return;
+      }
+    }
+
+    setBusy(false);
     onAssigned();
   }
 
@@ -150,14 +226,27 @@ export function AssignTaskForm({
     "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-teal focus:outline-none focus:ring-1 focus:ring-brand-teal";
   const labelClass = "mb-1 block text-sm font-medium text-slate-700";
 
+  const heading = isEdit
+    ? "Edit activity task"
+    : fromRequest
+      ? "Approve activity request"
+      : "Assign activity task";
+
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-900">Assign Activity Task</h3>
+        <h3 className="text-lg font-semibold text-slate-900">{heading}</h3>
         <button type="button" onClick={onCancel} className="text-slate-400 hover:text-slate-600">
           <X className="h-5 w-5" />
         </button>
       </div>
+
+      {fromRequest && draft && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Request from <strong>{draft.requesterName ?? "staff"}</strong> — route to any staff member,
+          link to a milestone KPI if needed, then assign. The request is approved once you assign.
+        </div>
+      )}
 
       {error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
@@ -236,50 +325,50 @@ export function AssignTaskForm({
 
       <div>
         <label className={labelClass}>Activity source</label>
-        <div className="flex gap-3">
-          <label
-            className={cn(
-              "flex flex-1 cursor-pointer flex-col rounded-lg border p-3 text-sm transition-colors",
-              source === "milestone_kpi"
-                ? "border-brand-teal bg-brand-mist"
-                : "border-slate-200 hover:border-slate-300"
-            )}
-          >
-            <input
-              type="radio"
-              name="source"
-              checked={source === "milestone_kpi"}
-              onChange={() => setSource("milestone_kpi")}
-              className="sr-only"
-            />
-            <span className="font-medium text-slate-900">Milestone (mandatory)</span>
-            <span className="mt-0.5 text-xs text-slate-500">
-              Links to KPI — counts toward milestone achievement
-            </span>
-          </label>
-          <label
-            className={cn(
-              "flex flex-1 cursor-pointer flex-col rounded-lg border p-3 text-sm transition-colors",
-              source === "additional"
-                ? "border-brand-teal bg-brand-mist"
-                : "border-slate-200 hover:border-slate-300"
-            )}
-          >
-            <input
-              type="radio"
-              name="source"
-              checked={source === "additional"}
-              onChange={() => {
-                setSource("additional");
-                setMilestoneId("");
-                setKpiId("");
-              }}
-              className="sr-only"
-            />
-            <span className="font-medium text-slate-900">Additional activity</span>
-            <span className="mt-0.5 text-xs text-slate-500">
-              Extra coverage beyond milestone targets — used in reports
-            </span>
+          <div className="flex gap-3">
+            <label
+              className={cn(
+                "flex flex-1 cursor-pointer flex-col rounded-lg border p-3 text-sm transition-colors",
+                source === "milestone_kpi"
+                  ? "border-brand-teal bg-brand-mist"
+                  : "border-slate-200 hover:border-slate-300"
+              )}
+            >
+              <input
+                type="radio"
+                name="source"
+                checked={source === "milestone_kpi"}
+                onChange={() => setSource("milestone_kpi")}
+                className="sr-only"
+              />
+              <span className="font-medium text-slate-900">Milestone (mandatory)</span>
+              <span className="mt-0.5 text-xs text-slate-500">
+                Links to KPI — counts toward milestone achievement
+              </span>
+            </label>
+            <label
+              className={cn(
+                "flex flex-1 cursor-pointer flex-col rounded-lg border p-3 text-sm transition-colors",
+                source === "additional"
+                  ? "border-brand-teal bg-brand-mist"
+                  : "border-slate-200 hover:border-slate-300"
+              )}
+            >
+              <input
+                type="radio"
+                name="source"
+                checked={source === "additional"}
+                onChange={() => {
+                  setSource("additional");
+                  setMilestoneId("");
+                  setKpiId("");
+                }}
+                className="sr-only"
+              />
+              <span className="font-medium text-slate-900">Additional activity</span>
+              <span className="mt-0.5 text-xs text-slate-500">
+                Extra coverage beyond milestone targets
+              </span>
           </label>
         </div>
       </div>
@@ -376,11 +465,6 @@ export function AssignTaskForm({
             </label>
           ))}
         </div>
-        {workType === "office" && beneficiaryMode === "none" && (
-          <p className="mt-2 text-xs text-slate-500">
-            Office tasks like admin work or reporting do not need beneficiary data.
-          </p>
-        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -418,9 +502,9 @@ export function AssignTaskForm({
         <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit">
+        <Button type="submit" disabled={busy}>
           <Plus className="mr-2 h-4 w-4" />
-          Assign task
+          {isEdit ? "Save changes" : fromRequest ? "Approve & assign" : "Assign task"}
         </Button>
       </div>
     </form>

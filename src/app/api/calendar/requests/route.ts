@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { parseDateOnly } from "@/lib/hr-utils";
 import { prisma } from "@/lib/prisma";
 import { hasFeature } from "@/lib/role-features";
-import { activityRequestActionSchema, activityRequestSchema } from "@/lib/validators";
+import { activityRequestActionSchema, activityRequestSchema, activityRequestUpdateSchema } from "@/lib/validators";
 import {
   notifyActivityRequestOutcome,
   notifyCalendarApprovers,
@@ -55,6 +55,24 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+  if (id) {
+    const single = await prisma.activityRequest.findUnique({
+      where: { id },
+      include: requestInclude,
+    });
+    if (!single) {
+      return NextResponse.json({ error: "Request not found" }, { status: 404 });
+    }
+    const canView =
+      single.requestedById === currentUser.id ||
+      hasFeature(currentUser.role, "calendar.approve");
+    if (!canView) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.json({ request: serializeRequest(single) });
+  }
+
   const from = searchParams.get("from");
   const to = searchParams.get("to");
   const viewAll = searchParams.get("all") === "1" && hasFeature(currentUser.role, "calendar.approve");
@@ -212,4 +230,81 @@ export async function PATCH(request: Request) {
   }
 
   return NextResponse.json({ request: serializeRequest(updated) });
+}
+
+function canManageActivityRequests(role: string): boolean {
+  return hasFeature(role as import("@/generated/prisma/enums").Role, "calendar.approve");
+}
+
+export async function PUT(request: Request) {
+  const currentUser = await getCurrentUser();
+  if (!currentUser || !canManageActivityRequests(currentUser.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const { id, ...fields } = body as { id?: string };
+  if (!id) {
+    return NextResponse.json({ error: "Request id required" }, { status: 400 });
+  }
+
+  const parsed = activityRequestUpdateSchema.safeParse(fields);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+  }
+
+  const existing = await prisma.activityRequest.findUnique({ where: { id } });
+  if (!existing) {
+    return NextResponse.json({ error: "Request not found" }, { status: 404 });
+  }
+
+  const scheduledDate = parsed.data.scheduledDate
+    ? parseDateOnly(parsed.data.scheduledDate)
+    : undefined;
+  const endDate =
+    parsed.data.endDate === null
+      ? null
+      : parsed.data.endDate
+        ? parseDateOnly(parsed.data.endDate)
+        : undefined;
+
+  if (scheduledDate && endDate && endDate < scheduledDate) {
+    return NextResponse.json({ error: "End date must be on or after start date" }, { status: 400 });
+  }
+
+  const updated = await prisma.activityRequest.update({
+    where: { id },
+    data: {
+      ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
+      ...(parsed.data.description !== undefined ? { description: parsed.data.description } : {}),
+      ...(parsed.data.workType !== undefined ? { workType: parsed.data.workType } : {}),
+      ...(scheduledDate !== undefined ? { scheduledDate } : {}),
+      ...(endDate !== undefined ? { endDate } : {}),
+      ...(parsed.data.projectId !== undefined ? { projectId: parsed.data.projectId } : {}),
+    },
+    include: requestInclude,
+  });
+
+  return NextResponse.json({ request: serializeRequest(updated) });
+}
+
+export async function DELETE(request: Request) {
+  const currentUser = await getCurrentUser();
+  if (!currentUser || !canManageActivityRequests(currentUser.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+  if (!id) {
+    return NextResponse.json({ error: "Request id required" }, { status: 400 });
+  }
+
+  const existing = await prisma.activityRequest.findUnique({ where: { id } });
+  if (!existing) {
+    return NextResponse.json({ error: "Request not found" }, { status: 404 });
+  }
+
+  await prisma.activityRequest.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
 }

@@ -22,6 +22,7 @@ import {
   ActivityTask,
   ActivityTaskStatus,
   ActivityWorkType,
+  deleteActivityTask,
   getAdditionalActivityCoverage,
   getTasksAssignedBy,
   getTasksForCoordinator,
@@ -34,6 +35,7 @@ import {
 import { exportActivityTasksExcel } from "@/lib/activityExport";
 import { exportActivityBeneficiariesExcel } from "@/lib/activityBeneficiaryExport";
 import { TodaysActivityShareButton } from "@/components/activities/TodaysActivityShareButton";
+import { AssignTaskDraft, requestToAssignDraft } from "@/lib/activity-request-utils";
 
 interface ActivitiesViewProps {
   userId: string;
@@ -45,6 +47,7 @@ interface ActivitiesViewProps {
   canViewCalendar: boolean;
   canRequest: boolean;
   canApprove: boolean;
+  canManageActivities: boolean;
 }
 
 type MainView = "tasks" | "calendar";
@@ -60,6 +63,7 @@ export function ActivitiesView({
   canViewCalendar,
   canRequest,
   canApprove,
+  canManageActivities,
 }: ActivitiesViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -67,9 +71,11 @@ export function ActivitiesView({
     !canViewCalendar && canViewTasks
       ? "tasks"
       : canViewCalendar
-        ? searchParams.get("view") === "tasks" && canViewTasks
+        ? searchParams.get("view") === "tasks" || searchParams.get("assignRequest")
           ? "tasks"
-          : "calendar"
+          : searchParams.get("view") === "calendar"
+            ? "calendar"
+            : "calendar"
         : "tasks";
 
   const [mainView, setMainView] = useState<MainView>(defaultView);
@@ -82,6 +88,8 @@ export function ActivitiesView({
   const [statusFilter, setStatusFilter] = useState<ActivityTaskStatus | "all">("all");
   const [workTypeFilter, setWorkTypeFilter] = useState<ActivityWorkType | "all">("all");
   const [exporting, setExporting] = useState(false);
+  const [assignDraft, setAssignDraft] = useState<AssignTaskDraft | null>(null);
+  const [editTask, setEditTask] = useState<ActivityTask | null>(null);
 
   const refresh = useCallback(() => {
     setTasks(loadActivityTasks());
@@ -97,6 +105,80 @@ export function ActivitiesView({
       window.removeEventListener("projects-updated", refresh);
     };
   }, [refresh]);
+
+  function openAssignFromRequest(request: {
+    id: string;
+    title: string;
+    description: string | null;
+    workType: string;
+    scheduledDate: string;
+    endDate: string | null;
+    projectId: string | null;
+    requestedById?: string;
+    requestedByName?: string;
+  }) {
+    switchMainView("tasks");
+    setTab("assign");
+    setShowAssignForm(true);
+    setEditTask(null);
+    setAssignDraft(requestToAssignDraft(request));
+    setSelectedTaskId(null);
+    setFocusedTaskId(null);
+  }
+
+  useEffect(() => {
+    const requestId = searchParams.get("assignRequest");
+    if (!requestId || !canAssign) return;
+
+    fetch(`/api/calendar/requests?id=${encodeURIComponent(requestId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.request) openAssignFromRequest(data.request);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.get("assignRequest"), canAssign]);
+
+  function clearAssignForm() {
+    setShowAssignForm(false);
+    setAssignDraft(null);
+    setEditTask(null);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("assignRequest");
+    const query = params.toString();
+    router.replace(query ? `/dashboard/activities?${query}` : "/dashboard/activities", {
+      scroll: false,
+    });
+  }
+
+  function handleEditTask(task: ActivityTask) {
+    setEditTask(task);
+    setAssignDraft(null);
+    setShowAssignForm(true);
+    setTab("assign");
+    setSelectedTaskId(null);
+    setFocusedTaskId(null);
+  }
+
+  function handleDeleteTask(task: ActivityTask) {
+    if (
+      !window.confirm(
+        `Delete activity "${task.title}"? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    deleteActivityTask(task.id);
+    refresh();
+    setSelectedTaskId(null);
+    setFocusedTaskId(null);
+  }
+
+  function handleAssignComplete() {
+    refresh();
+    clearAssignForm();
+    setTab("team");
+  }
 
   function switchMainView(view: MainView) {
     setMainView(view);
@@ -277,8 +359,10 @@ export function ActivitiesView({
           canViewAll={canViewAll}
           canRequest={canRequest}
           canApprove={canApprove}
+          canManage={canManageActivities}
           embedded
           onOpenTask={openTaskFromCalendar}
+          onApproveAndAssign={openAssignFromRequest}
         />
       )}
 
@@ -330,13 +414,11 @@ export function ActivitiesView({
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <AssignTaskForm
                 currentUserId={userId}
-                onAssigned={() => {
-                  refresh();
-                  setShowAssignForm(false);
-                  setTab("team");
-                }}
+                draft={assignDraft}
+                editTask={editTask}
+                onAssigned={handleAssignComplete}
                 onCancel={() => {
-                  setShowAssignForm(false);
+                  clearAssignForm();
                   setTab("team");
                 }}
               />
@@ -352,6 +434,9 @@ export function ActivitiesView({
                   task={focusedTask}
                   userId={userId}
                   userName={userName}
+                  canManage={canManageActivities}
+                  onEdit={() => handleEditTask(focusedTask)}
+                  onDelete={() => handleDeleteTask(focusedTask)}
                   onUpdate={refresh}
                   onStartFocus={() => handleStartFocus(focusedTask.id)}
                   onExitFocus={handleExitFocus}
@@ -475,6 +560,9 @@ export function ActivitiesView({
                         task={selectedTask}
                         userId={userId}
                         userName={userName}
+                        canManage={canManageActivities}
+                        onEdit={() => handleEditTask(selectedTask)}
+                        onDelete={() => handleDeleteTask(selectedTask)}
                         onUpdate={refresh}
                         onStartFocus={() => handleStartFocus(selectedTask.id)}
                       />

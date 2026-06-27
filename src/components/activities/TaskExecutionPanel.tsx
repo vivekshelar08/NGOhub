@@ -6,7 +6,9 @@ import {
   CalendarClock,
   CheckCircle2,
   FileSpreadsheet,
+  Pencil,
   Play,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -64,6 +66,9 @@ interface TaskExecutionPanelProps {
   task: ActivityTask;
   userId: string;
   userName: string;
+  canManage?: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
   onUpdate: () => void;
   onStartFocus?: () => void;
   onExitFocus?: () => void;
@@ -74,6 +79,9 @@ export function TaskExecutionPanel({
   task,
   userId,
   userName,
+  canManage,
+  onEdit,
+  onDelete,
   onUpdate,
   onStartFocus,
   onExitFocus,
@@ -284,7 +292,20 @@ export function TaskExecutionPanel({
             </span>
           </div>
         </div>
-        {task.status === "completed" && (
+        <div className="flex flex-wrap items-center gap-2">
+          {canManage && onEdit && onDelete && task.status !== "active" && (
+            <>
+              <Button type="button" variant="secondary" size="sm" className="gap-1.5" onClick={onEdit}>
+                <Pencil className="h-4 w-4" />
+                Edit
+              </Button>
+              <Button type="button" variant="danger" size="sm" className="gap-1.5" onClick={onDelete}>
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </Button>
+            </>
+          )}
+          {task.status === "completed" && (
           <Button
             type="button"
             variant="secondary"
@@ -296,6 +317,7 @@ export function TaskExecutionPanel({
             Export Excel
           </Button>
         )}
+        </div>
         {task.scheduledDate && (
           <p className="text-sm text-slate-500">
             Scheduled: {formatDateKey(task.scheduledDate.slice(0, 10))}
