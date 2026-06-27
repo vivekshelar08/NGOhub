@@ -369,8 +369,8 @@ export function AssignTaskForm({
               <span className="mt-0.5 text-xs text-slate-500">
                 Extra coverage beyond milestone targets
               </span>
-          </label>
-        </div>
+            </label>
+          </div>
       </div>
 
       {source === "milestone_kpi" && selectedProject && (

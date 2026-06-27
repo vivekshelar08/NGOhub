@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CalendarDays,
   ChevronLeft,
@@ -127,6 +128,7 @@ export function ActivityCalendarView({
   onOpenTask,
   onApproveAndAssign,
 }: ActivityCalendarViewProps) {
+  const router = useRouter();
   const [year, setYear] = useState(0);
   const [month, setMonth] = useState(0);
   const [selectedDate, setSelectedDate] = useState("");
@@ -342,7 +344,7 @@ export function ActivityCalendarView({
       onApproveAndAssign(req);
       return;
     }
-    window.location.href = `/dashboard/activities?assignRequest=${req.id}`;
+    router.push(`/dashboard/activities?assignRequest=${req.id}`);
   }
 
   async function handleDeleteRequest(id: string, title: string) {
