@@ -16,6 +16,7 @@ import { Role } from "@/generated/prisma/enums";
 import { Card } from "@/components/ui/Card";
 import { PageHeader, PageShell } from "@/components/ui/PageHeader";
 import { AttendancePunchWidget } from "@/components/hr/AttendancePunchWidget";
+import { TodaysActivityShareButton } from "@/components/activities/TodaysActivityShareButton";
 import { hasFeature } from "@/lib/role-features";
 import {
   ActivityTask,
@@ -90,6 +91,7 @@ export function MyWorkDashboard({
   const canApproveFinance = hasFeature(userRole, "finance.approve");
   const canAssign = hasFeature(userRole, "activities.assign");
   const canHrManage = hasFeature(userRole, "hr.manage");
+  const canShareFieldWork = hasFeature(userRole, "activities.list");
 
   const greeting = useMemo(() => {
     const h = new Date().getHours();
@@ -233,6 +235,20 @@ export function MyWorkDashboard({
         <Card className="mb-6 flex items-center gap-3 p-5 text-emerald-800 bg-emerald-50 border-emerald-200">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
           <p className="text-sm font-medium">You are all caught up for now.</p>
+        </Card>
+      )}
+
+      {canShareFieldWork && (
+        <Card className="mb-6 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold text-slate-900">Today&apos;s field work</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Share a short summary of what you completed today with your team on WhatsApp.
+              </p>
+            </div>
+            <TodaysActivityShareButton userId={userId} userName={userName} />
+          </div>
         </Card>
       )}
 

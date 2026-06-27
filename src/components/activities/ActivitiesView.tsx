@@ -33,9 +33,11 @@ import {
 } from "@/lib/activities";
 import { exportActivityTasksExcel } from "@/lib/activityExport";
 import { exportActivityBeneficiariesExcel } from "@/lib/activityBeneficiaryExport";
+import { TodaysActivityShareButton } from "@/components/activities/TodaysActivityShareButton";
 
 interface ActivitiesViewProps {
   userId: string;
+  userName: string;
   userRole: Role;
   canViewTasks: boolean;
   canAssign: boolean;
@@ -50,6 +52,7 @@ type TaskTab = "my_tasks" | "team" | "assign";
 
 export function ActivitiesView({
   userId,
+  userName,
   userRole,
   canViewTasks,
   canAssign,
@@ -229,12 +232,17 @@ export function ActivitiesView({
             Your tasks, team assignments, and calendar — optimized for mobile use in the field.
           </p>
         </div>
-        {canAssign && mainView === "tasks" && tab !== "assign" && (
-          <Button onClick={() => { setShowAssignForm(true); setTab("assign"); }}>
-            <Plus className="mr-2 h-4 w-4" />
-            Assign task
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {canViewTasks && (
+            <TodaysActivityShareButton userId={userId} userName={userName} />
+          )}
+          {canAssign && mainView === "tasks" && tab !== "assign" && (
+            <Button onClick={() => { setShowAssignForm(true); setTab("assign"); }}>
+              <Plus className="mr-2 h-4 w-4" />
+              Assign task
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Main view: Tasks | Calendar */}
@@ -342,6 +350,8 @@ export function ActivitiesView({
                 <TaskExecutionPanel
                   key={focusedTask.id}
                   task={focusedTask}
+                  userId={userId}
+                  userName={userName}
                   onUpdate={refresh}
                   onStartFocus={() => handleStartFocus(focusedTask.id)}
                   onExitFocus={handleExitFocus}
@@ -463,6 +473,8 @@ export function ActivitiesView({
                     {selectedTask ? (
                       <TaskExecutionPanel
                         task={selectedTask}
+                        userId={userId}
+                        userName={userName}
                         onUpdate={refresh}
                         onStartFocus={() => handleStartFocus(selectedTask.id)}
                       />

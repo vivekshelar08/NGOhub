@@ -34,8 +34,7 @@ import { syncBeneficiariesToPortal } from "@/lib/beneficiary-sync";
 import { getProjectById } from "@/lib/projects";
 import { projectRequiresServiceOnEnrollment } from "@/lib/projectMeta";
 import { exportActivityTaskExcel } from "@/lib/activityExport";
-import { BENEFICIARY_CATEGORY_LABELS } from "@/lib/service-portal-utils";
-import { BeneficiaryCategory } from "@/generated/prisma/enums";
+import { ActivityCompletionSummary } from "@/components/activities/ActivityCompletionSummary";
 
 function captureFieldEvidence(): Promise<{
   evidenceLatitude?: number;
@@ -63,6 +62,8 @@ function captureFieldEvidence(): Promise<{
 
 interface TaskExecutionPanelProps {
   task: ActivityTask;
+  userId: string;
+  userName: string;
   onUpdate: () => void;
   onStartFocus?: () => void;
   onExitFocus?: () => void;
@@ -71,6 +72,8 @@ interface TaskExecutionPanelProps {
 
 export function TaskExecutionPanel({
   task,
+  userId,
+  userName,
   onUpdate,
   onStartFocus,
   onExitFocus,
@@ -394,50 +397,7 @@ export function TaskExecutionPanel({
             <p className="text-red-600">Canceled: {task.cancelReason}</p>
           )}
           {task.status === "completed" && (
-            <>
-              <p>
-                Beneficiaries covered:{" "}
-                {beneficiaryMode === "none"
-                  ? "N/A"
-                  : beneficiaryMode === "list"
-                    ? (task.beneficiaries?.length ?? 0)
-                    : task.beneficiaryCount}
-              </p>
-              {task.beneficiaries && task.beneficiaries.length > 0 && (
-                <ul className="space-y-2 text-slate-500">
-                  {task.beneficiaries.map((b) => (
-                    <li key={b.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm">
-                      <span className="font-medium text-slate-800">{b.name}</span>
-                      {b.contact && ` · ${b.contact}`}
-                      {b.category && (
-                        <span>
-                          {" "}
-                          · {BENEFICIARY_CATEGORY_LABELS[b.category as BeneficiaryCategory] ?? b.category}
-                        </span>
-                      )}
-                      {b.annualIncome != null && ` · ₹${b.annualIncome.toLocaleString("en-IN")}/yr`}
-                      {b.familyMembers != null && ` · ${b.familyMembers} family members`}
-                      {b.isUrgentCase && " · Urgent"}
-                      {b.isCaseStudy && " · Case study"}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {(task.photoAttachments?.length ?? 0) > 0 && (
-                <p>{task.photoAttachments!.length} photo(s) attached</p>
-              )}
-              {task.evidenceCapturedAt && (
-                <p className="text-emerald-700">
-                  Verified visit · {new Date(task.evidenceCapturedAt).toLocaleString("en-IN")}
-                  {task.evidenceLatitude != null && task.evidenceLongitude != null
-                    ? ` · GPS ${task.evidenceLatitude.toFixed(4)}, ${task.evidenceLongitude.toFixed(4)}`
-                    : ""}
-                </p>
-              )}
-              {(task.pdfAttachments?.length ?? 0) > 0 && (
-                <p>{task.pdfAttachments!.length} PDF(s) attached</p>
-              )}
-            </>
+            <ActivityCompletionSummary task={task} userId={userId} userName={userName} />
           )}
         </div>
       )}

@@ -34,6 +34,7 @@ export default async function ActivitiesPage() {
     <Suspense fallback={<ActivitiesLoading />}>
       <ActivitiesView
         userId={user.id}
+        userName={user.name}
         userRole={user.role as Role}
         canViewTasks={canViewTasks}
         canAssign={!!canAssign}
