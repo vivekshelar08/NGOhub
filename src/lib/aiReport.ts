@@ -1,6 +1,5 @@
 import {
   generateImpactAnalysis,
-  polishImpactNarrative,
   resolveAiEngine,
   callAiEngine,
   getAiEngineLabel,
@@ -486,24 +485,6 @@ function buildImpactSections(payload: ImpactReportPayload): ImpactReportSections
   };
 }
 
-function sectionsToAnalysis(sections: ImpactReportSections): ImpactAnalysisJson {
-  return {
-    executiveSummary: sections.executiveSummary,
-    inputs: sections.inputs,
-    outputs: sections.outputs,
-    outcomes: sections.outcomes,
-    insights: sections.insights,
-    impact: sections.impact,
-    sdgContribution: sections.sdgContribution,
-    lessonsLearned: sections.lessonsLearned,
-    programActivities: sections.programActivities,
-    beneficiaryImpact: sections.beneficiaryImpact,
-    kpiProgress: sections.kpiProgress,
-    financialHighlights: sections.financialHighlights,
-    recommendations: sections.recommendations,
-  };
-}
-
 function analysisToSections(analysis: ImpactAnalysisJson): ImpactReportSections {
   return {
     executiveSummary: analysis.executiveSummary,
@@ -652,28 +633,14 @@ export async function generateImpactReport(payload: ImpactReportPayload): Promis
     const analysisResult = await generateImpactAnalysis(dataContext);
     if (analysisResult) {
       const sections = analysisToSections(analysisResult.analysis);
-      const polished = await polishImpactNarrative(analysisResult.analysis, dataContext);
       return {
-        narrative: polished?.narrative ?? buildImpactTemplateNarrative(payload, sections),
+        narrative: buildImpactTemplateNarrative(payload, sections),
         provider: analysisResult.provider,
         aiModel: analysisResult.model,
         generatedAt: new Date().toISOString(),
         filterSummary,
         charts,
         sections,
-      };
-    }
-
-    const polished = await polishImpactNarrative(sectionsToAnalysis(templateSections), dataContext);
-    if (polished) {
-      return {
-        narrative: polished.narrative,
-        provider: polished.provider,
-        aiModel: polished.model,
-        generatedAt: new Date().toISOString(),
-        filterSummary,
-        charts,
-        sections: templateSections,
       };
     }
   }

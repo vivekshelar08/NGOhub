@@ -16,6 +16,9 @@ import { parseDateOnly } from "@/lib/hr-utils";
 import { TASK_STATUS_LABELS } from "@/lib/activities";
 import type { ActivityTaskStatus } from "@/lib/activities";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
 function buildDateFilter(from?: string, to?: string) {
   if (!from && !to) return undefined;
   const filter: { gte?: Date; lte?: Date } = {};
@@ -277,7 +280,7 @@ async function fetchFinanceAnalytics(
     prisma.beneficiary.count({ where: beneficiaryWhere }),
     prisma.serviceDelivery.findMany({
       where: {
-        beneficiary: beneficiaryWhere.projectId ? { projectId: filters.projectId } : {},
+        ...(filters.projectId ? { beneficiary: { projectId: filters.projectId } } : {}),
         ...(createdAt ? { createdAt } : {}),
       },
       select: { status: true },

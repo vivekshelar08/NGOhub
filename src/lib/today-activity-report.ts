@@ -91,7 +91,7 @@ export function serializeTaskForReport(task: ActivityTask): TodayActivityTaskSum
   };
 }
 
-function buildTemplateFromSummaries(request: TodayActivityReportRequest): string {
+export function buildTemplateFromSummaries(request: TodayActivityReportRequest): string {
   const orgName = request.orgName ?? DEFAULT_ORG_SETTINGS.orgName;
   const dateLabel = formatDateKey(localDateKey(new Date()));
 

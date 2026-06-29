@@ -9,11 +9,13 @@ import {
   shareViaWhatsApp,
 } from "@/lib/activity-share";
 import {
+  buildTemplateFromSummaries,
   getTodayReportProviderLabel,
   serializeTaskForReport,
   TodayActivityReportResult,
 } from "@/lib/today-activity-report";
 import { DEFAULT_ORG_SETTINGS } from "@/lib/orgSettings";
+import { fetchJson } from "@/lib/fetch-json";
 
 interface TodaysActivityReportModalProps {
   userId: string;
@@ -49,7 +51,7 @@ export function TodaysActivityReportModal({
         return;
       }
 
-      const res = await fetch("/api/reports/today-activity", {
+      const res = await fetchJson<TodayActivityReportResult>("/api/reports/today-activity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -59,11 +61,30 @@ export function TodaysActivityReportModal({
           tasks: tasks.map(serializeTaskForReport),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to generate report");
-      setReport(data as TodayActivityReportResult);
+      setReport(res);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate report");
+      const tasks = task ? [task] : getTodaysCompletedTasks(userId);
+      if (tasks.length > 0) {
+        const fallback = buildTemplateFromSummaries({
+          userName,
+          orgName: DEFAULT_ORG_SETTINGS.orgName,
+          mode: task ? "single" : "daily",
+          tasks: tasks.map(serializeTaskForReport),
+        });
+        setReport({
+          message: fallback,
+          provider: "template",
+          generatedAt: new Date().toISOString(),
+          mode: task ? "single" : "daily",
+        });
+        setError(
+          err instanceof Error
+            ? `${err.message} — showing offline template instead.`
+            : "API unavailable — showing offline template."
+        );
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to generate report");
+      }
     } finally {
       setLoading(false);
     }

@@ -145,11 +145,19 @@ async function callGroq(config: AiEngineConfig, options: AiChatOptions): Promise
     }),
   });
 
-  if (!res.ok) return null;
-  const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  return data.choices?.[0]?.message?.content?.trim() ?? null;
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    console.error("[Groq API]", res.status, errText.slice(0, 200));
+    return null;
+  }
+  try {
+    const data = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    return data.choices?.[0]?.message?.content?.trim() ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function callGemini(config: AiEngineConfig, options: AiChatOptions): Promise<string | null> {
@@ -226,7 +234,11 @@ export interface ImpactAnalysisJson {
 
 export function parseImpactAnalysisJson(raw: string): ImpactAnalysisJson | null {
   try {
-    const parsed = JSON.parse(raw) as Partial<ImpactAnalysisJson>;
+    let cleaned = raw.trim();
+    if (cleaned.startsWith("```")) {
+      cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    }
+    const parsed = JSON.parse(cleaned) as Partial<ImpactAnalysisJson>;
     if (!parsed.executiveSummary || !Array.isArray(parsed.insights)) return null;
     return {
       executiveSummary: String(parsed.executiveSummary),

@@ -52,6 +52,7 @@ import { ImpactReportPreview, ImpactReportProviderBadge } from "@/components/rep
 import { DashboardViewId, LIVE_REFRESH_MS } from "@/lib/report-dashboards";
 import { computeCohortReport, exportCohortReportExcel } from "@/lib/cohortReport";
 import { AnalyticsOverview } from "@/lib/analytics";
+import { fetchJson } from "@/lib/fetch-json";
 
 interface ReportsViewProps {
   canExport: boolean;
@@ -200,12 +201,9 @@ export function ReportsView({ canExport }: ReportsViewProps) {
       if (projectId) params.set("projectId", projectId);
       if (from) params.set("from", from);
       if (to) params.set("to", to);
-      const res = await fetch(`/api/analytics/overview?${params}`);
-      if (res.ok) {
-        const data = (await res.json()) as AnalyticsOverview;
-        setAnalytics(data);
-        setLastRefreshed(data.generatedAt);
-      }
+      const res = await fetchJson<AnalyticsOverview>(`/api/analytics/overview?${params}`);
+      setAnalytics(res);
+      setLastRefreshed(res.generatedAt);
     } catch {
       /* analytics optional */
     } finally {
@@ -443,7 +441,7 @@ export function ReportsView({ canExport }: ReportsViewProps) {
     setAiProvider(null);
 
     try {
-      const res = await fetch("/api/reports/generate", {
+      const data = await fetchJson<ImpactReportResult>("/api/reports/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -495,8 +493,6 @@ export function ReportsView({ canExport }: ReportsViewProps) {
           })(),
         }),
       });
-      const data = (await res.json()) as ImpactReportResult & { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Impact report generation failed");
       setImpactReport(data);
       setAiNarrative(data.narrative);
       setAiProvider(data.provider);
@@ -531,33 +527,34 @@ export function ReportsView({ canExport }: ReportsViewProps) {
     setAiProvider(null);
 
     try {
-      const res = await fetch("/api/reports/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reportType,
-          projectId: projectId || undefined,
-          from: from || undefined,
-          to: to || undefined,
-          status: status || undefined,
-          category: category || undefined,
-          urgentOnly,
-          caseStudyOnly,
-          workType: workType || undefined,
-          query: query || undefined,
-          sdgGoal: sdgGoal === "" ? undefined : sdgGoal,
-          activities: buildActivityPayload(),
-          achievementSummary: {
-            targetActivities: achievementOverview.targetActivities,
-            achievedActivities: achievementOverview.achievedActivities,
-            targetBeneficiaries: achievementOverview.targetBeneficiaries,
-            achievedBeneficiaries: achievementOverview.achievedBeneficiaries,
-            projectCount: achievementOverview.activeProjects,
-          },
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Report generation failed");
+      const data = await fetchJson<{ narrative: string; provider: ImpactReportResult["provider"] }>(
+        "/api/reports/generate",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reportType,
+            projectId: projectId || undefined,
+            from: from || undefined,
+            to: to || undefined,
+            status: status || undefined,
+            category: category || undefined,
+            urgentOnly,
+            caseStudyOnly,
+            workType: workType || undefined,
+            query: query || undefined,
+            sdgGoal: sdgGoal === "" ? undefined : sdgGoal,
+            activities: buildActivityPayload(),
+            achievementSummary: {
+              targetActivities: achievementOverview.targetActivities,
+              achievedActivities: achievementOverview.achievedActivities,
+              targetBeneficiaries: achievementOverview.targetBeneficiaries,
+              achievedBeneficiaries: achievementOverview.achievedBeneficiaries,
+              projectCount: achievementOverview.activeProjects,
+            },
+          }),
+        }
+      );
       setAiNarrative(data.narrative);
       setAiProvider(data.provider);
       setActiveTab("ai");

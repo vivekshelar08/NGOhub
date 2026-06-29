@@ -6,6 +6,9 @@ import {
   TodayActivityReportRequest,
 } from "@/lib/today-activity-report";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user || !hasFeature(user.role, "activities.list")) {
