@@ -198,6 +198,35 @@ enum JournalSourceType {
   VENDOR_PAYMENT
   BANK
   ADJUSTMENT
+  GRANT_PAYMENT
+}
+
+enum MilestoneFinanceStatus {
+  PLANNED
+  IN_PROGRESS
+  ACHIEVED
+  UC_DRAFT
+  UC_SUBMITTED
+  UC_APPROVED
+  INVOICED
+  PAYMENT_RECEIVED
+  CLOSED
+}
+
+enum UtilizationCertificateStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum GrantInvoiceStatus {
+  DRAFT
+  SENT
+  APPROVED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
 }
 
 enum VendorBillStatus {
@@ -333,6 +362,10 @@ model User {
   periodsClosed            FinancialPeriod[]          @relation("PeriodsClosedBy")
   vendorBillsCreated       VendorBill[]               @relation("VendorBillsCreated")
   vendorPaymentsRecorded   VendorPayment[]            @relation("VendorPaymentsRecorded")
+  grantInvoicesCreated     GrantInvoice[]             @relation("GrantInvoicesCreated")
+  grantPaymentsRecorded    GrantPayment[]             @relation("GrantPaymentsRecorded")
+  ucsSubmitted             UtilizationCertificate[]   @relation("UcSubmittedBy")
+  ucsApproved              UtilizationCertificate[]   @relation("UcApprovedBy")
   financeAuditLogs         FinanceAuditLog[]          @relation("FinanceAuditBy")
   attendanceCorrections    AttendanceCorrectionRequest[] @relation("AttendanceCorrections")
   attendanceReviews        AttendanceCorrectionRequest[] @relation("AttendanceCorrectionReviews")
@@ -769,9 +802,12 @@ model Expense {
   fund            Fund?           @relation(fields: [fundId], references: [id])
   financeProjectId String?
   financeProject  FinanceProject? @relation(fields: [financeProjectId], references: [id])
+  milestoneBudgetId String?
+  milestoneBudget ProjectMilestoneBudget? @relation(fields: [milestoneBudgetId], references: [id])
   journalEntryId  String?         @unique
   journalEntry    JournalEntry?   @relation(fields: [journalEntryId], references: [id])
   attachments     ExpenseAttachment[]
+  ucExpenseLines  UcExpenseLine[]
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
@@ -781,6 +817,7 @@ model Expense {
   @@index([projectId])
   @@index([fundId])
   @@index([financeProjectId])
+  @@index([milestoneBudgetId])
 }
 
 model ExpenseAttachment {
@@ -1143,15 +1180,127 @@ model FinanceProject {
   totalBudget  Decimal?            @db.Decimal(14, 2)
   isActive     Boolean             @default(true)
   legacyProjectId String?
+  donorId         String?
+  donorName       String?
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
   budgetLines  ProjectBudgetLine[]
+  milestoneBudgets ProjectMilestoneBudget[]
   expenses     Expense[]
   donations    Donation[]
   journalLines JournalLine[]
   vendorBills  VendorBill[]
+  grantInvoices GrantInvoice[]
 
   @@index([isActive])
+  @@index([legacyProjectId])
+}
+
+model ProjectMilestoneBudget {
+  id               String                 @id @default(uuid())
+  financeProjectId String
+  financeProject   FinanceProject         @relation(fields: [financeProjectId], references: [id], onDelete: Cascade)
+  legacyMilestoneId String
+  milestoneName    String
+  sequence         Int                    @default(0)
+  budgetAmount     Decimal                @db.Decimal(14, 2)
+  budgetPercent    Decimal?               @db.Decimal(5, 2)
+  achievementPct   Decimal                @default(0) @db.Decimal(5, 2)
+  status           MilestoneFinanceStatus @default(PLANNED)
+  targetActivities Int                    @default(0)
+  achievedActivities Int                  @default(0)
+  targetBeneficiaries Int                 @default(0)
+  achievedBeneficiaries Int               @default(0)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  expenses         Expense[]
+  utilizationCerts UtilizationCertificate[]
+  grantInvoices    GrantInvoice[]
+
+  @@unique([financeProjectId, legacyMilestoneId])
+  @@index([financeProjectId])
+  @@index([status])
+}
+
+model UtilizationCertificate {
+  id                  String                       @id @default(uuid())
+  milestoneBudgetId   String
+  milestoneBudget     ProjectMilestoneBudget       @relation(fields: [milestoneBudgetId], references: [id], onDelete: Cascade)
+  periodStart         DateTime                     @db.Date
+  periodEnd           DateTime                     @db.Date
+  totalUtilized       Decimal                      @default(0) @db.Decimal(14, 2)
+  status              UtilizationCertificateStatus @default(DRAFT)
+  notes               String?
+  submittedAt         DateTime?
+  approvedAt          DateTime?
+  submittedById       String?
+  submittedBy         User?                        @relation("UcSubmittedBy", fields: [submittedById], references: [id])
+  approvedById        String?
+  approvedBy          User?                        @relation("UcApprovedBy", fields: [approvedById], references: [id])
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  expenseLines        UcExpenseLine[]
+  grantInvoice        GrantInvoice?
+
+  @@index([milestoneBudgetId])
+  @@index([status])
+}
+
+model UcExpenseLine {
+  id        String                 @id @default(uuid())
+  ucId      String
+  uc        UtilizationCertificate @relation(fields: [ucId], references: [id], onDelete: Cascade)
+  expenseId String
+  expense   Expense                @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  amount    Decimal                @db.Decimal(12, 2)
+
+  @@unique([ucId, expenseId])
+  @@index([expenseId])
+}
+
+model GrantInvoice {
+  id                String            @id @default(uuid())
+  financeProjectId  String
+  financeProject    FinanceProject    @relation(fields: [financeProjectId], references: [id], onDelete: Cascade)
+  milestoneBudgetId String?
+  milestoneBudget   ProjectMilestoneBudget? @relation(fields: [milestoneBudgetId], references: [id])
+  ucId              String?           @unique
+  utilizationCert   UtilizationCertificate? @relation(fields: [ucId], references: [id])
+  invoiceNumber     String            @unique
+  invoiceDate       DateTime          @db.Date
+  amount            Decimal           @db.Decimal(14, 2)
+  donorName         String
+  donorPan          String?
+  description       String?
+  status            GrantInvoiceStatus @default(DRAFT)
+  journalEntryId    String?           @unique
+  journalEntry      JournalEntry?     @relation(fields: [journalEntryId], references: [id])
+  createdById       String
+  createdBy         User              @relation("GrantInvoicesCreated", fields: [createdById], references: [id])
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  payments          GrantPayment[]
+
+  @@index([financeProjectId])
+  @@index([status])
+}
+
+model GrantPayment {
+  id             String        @id @default(uuid())
+  invoiceId      String
+  invoice        GrantInvoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  paymentDate    DateTime      @db.Date
+  amount         Decimal       @db.Decimal(14, 2)
+  paymentMode    PaymentType   @default(BANK_TRANSFER)
+  reference      String?
+  journalEntryId String?       @unique
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+  recordedById   String
+  recordedBy     User          @relation("GrantPaymentsRecorded", fields: [recordedById], references: [id])
+  createdAt      DateTime      @default(now())
+
+  @@index([invoiceId])
+  @@index([paymentDate])
 }
 
 model ProjectBudgetLine {
@@ -1241,6 +1390,8 @@ model JournalEntry {
   payrollRun      PayrollRun?
   vendorBill      VendorBill?
   vendorPayment   VendorPayment?
+  grantInvoice    GrantInvoice?
+  grantPayment    GrantPayment?
 
   @@unique([financialYearId, voucherNumber])
   @@index([entryDate])

@@ -102,6 +102,7 @@ export async function GET(request: Request) {
     const category = searchParams.get("category");
     const status = searchParams.get("status");
     const projectId = searchParams.get("projectId");
+    const financeProjectId = searchParams.get("financeProjectId");
 
     const where: Record<string, unknown> = {};
     if (!viewAll) where.submittedById = currentUser.id;
@@ -112,6 +113,7 @@ export async function GET(request: Request) {
     if (category) where.category = category;
     if (status) where.status = status;
     if (projectId) where.projectId = projectId;
+    if (financeProjectId) where.financeProjectId = financeProjectId;
 
     const expenses = await prisma.expense.findMany({
       where,

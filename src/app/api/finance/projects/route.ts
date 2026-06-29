@@ -13,6 +13,8 @@ const projectSchema = z.object({
   endDate: z.string().optional(),
   totalBudget: z.number().positive().optional(),
   legacyProjectId: z.string().optional(),
+  donorId: z.string().optional(),
+  donorName: z.string().optional(),
   budgetLines: z
     .array(
       z.object({
@@ -81,6 +83,8 @@ export async function POST(request: Request) {
       endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
       totalBudget: parsed.data.totalBudget,
       legacyProjectId: parsed.data.legacyProjectId,
+      donorId: parsed.data.donorId,
+      donorName: parsed.data.donorName,
       budgetLines: parsed.data.budgetLines
         ? { create: parsed.data.budgetLines }
         : undefined,
@@ -119,6 +123,8 @@ export async function PATCH(request: Request) {
       endDate: data.endDate ? new Date(data.endDate) : undefined,
       totalBudget: data.totalBudget,
       legacyProjectId: data.legacyProjectId,
+      donorId: data.donorId,
+      donorName: data.donorName,
       isActive: data.isActive,
       ...(budgetLines
         ? {

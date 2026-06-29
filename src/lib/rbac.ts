@@ -16,6 +16,7 @@ export type Permission =
   | "financial_reports"
   | "manage_vendors"
   | "period_close"
+  | "modify_finance_records"
   | "manage_hr"
   | "view_attendance"
   | "view_reports"
@@ -45,6 +46,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "manage_beneficiaries",
     "approve_expenses",
     "view_finance",
+    "modify_finance_records",
     ...ACCOUNTING_PERMISSIONS,
     "view_attendance",
     "view_reports",
@@ -77,6 +79,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "submit_expenses",
     "approve_expenses",
     "view_finance",
+    "modify_finance_records",
     ...ACCOUNTING_PERMISSIONS,
     "view_attendance",
     "view_reports",

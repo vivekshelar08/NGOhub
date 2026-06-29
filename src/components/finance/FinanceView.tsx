@@ -18,6 +18,7 @@ import { ProjectBudgetPanel } from "@/components/finance/ProjectBudgetPanel";
 import { BudgetVsActualPanel } from "@/components/finance/BudgetVsActualPanel";
 import { InterFundPanel } from "@/components/finance/InterFundPanel";
 import { PayrollJournalsPanel } from "@/components/finance/PayrollJournalsPanel";
+import { ProjectFinanceWorkflowPanel } from "@/components/finance/ProjectFinanceWorkflowPanel";
 
 type FinanceTab =
   | "add"
@@ -34,7 +35,8 @@ type FinanceTab =
   | "budget"
   | "budget_actual"
   | "inter_fund"
-  | "payroll";
+  | "payroll"
+  | "grant_workflow";
 
 interface FinanceViewProps {
   userName: string;
@@ -90,6 +92,7 @@ export function FinanceView({
     { id: "vendors", label: "Vendors", show: canVendors },
     { id: "banking", label: "Banking", show: canBanking },
     { id: "budget", label: "Projects", show: canBudget },
+    { id: "grant_workflow", label: "Grant workflow", show: canAccounting },
     { id: "budget_actual", label: "Budget vs actual", show: canBudgetActual },
     { id: "inter_fund", label: "Inter-fund", show: canInterFund },
     { id: "payroll", label: "Payroll GL", show: canAccounting },
@@ -111,6 +114,7 @@ export function FinanceView({
     "compliance",
     "budget",
     "budget_actual",
+    "grant_workflow",
     "inter_fund",
     "payroll",
   ].includes(tab);
@@ -168,6 +172,9 @@ export function FinanceView({
       {tab === "compliance" && canCompliance && <ComplianceExportsPanel />}
       {tab === "budget" && canBudget && <ProjectBudgetPanel onFlash={onFlash} />}
       {tab === "budget_actual" && canBudgetActual && <BudgetVsActualPanel />}
+      {tab === "grant_workflow" && canAccounting && (
+        <ProjectFinanceWorkflowPanel onFlash={onFlash} />
+      )}
       {tab === "inter_fund" && canInterFund && <InterFundPanel onFlash={onFlash} />}
       {tab === "payroll" && canAccounting && <PayrollJournalsPanel />}
 
