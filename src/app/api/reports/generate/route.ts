@@ -263,7 +263,44 @@ async function fetchFinanceAnalytics(
   filters: { projectId?: string; from?: string; to?: string }
 ) {
   const canFinance = hasFeature(role as Parameters<typeof hasFeature>[0], "finance.view");
-  if (!canFinance) return { financePermitted: false as const };
+  const beneficiaryWhere: Record<string, unknown> = {};
+  if (filters.projectId) beneficiaryWhere.projectId = filters.projectId;
+  const createdAt = buildDateFilter(filters.from, filters.to);
+  if (createdAt) beneficiaryWhere.createdAt = createdAt;
+
+  const meetingWhere: Record<string, unknown> = {};
+  if (filters.projectId) meetingWhere.projectId = filters.projectId;
+  const scheduledDate = buildDateFilter(filters.from, filters.to);
+  if (scheduledDate) meetingWhere.scheduledDate = scheduledDate;
+
+  const [beneficiaryCount, deliveries, meetingsApproved] = await Promise.all([
+    prisma.beneficiary.count({ where: beneficiaryWhere }),
+    prisma.serviceDelivery.findMany({
+      where: {
+        beneficiary: beneficiaryWhere.projectId ? { projectId: filters.projectId } : {},
+        ...(createdAt ? { createdAt } : {}),
+      },
+      select: { status: true },
+    }),
+    prisma.activityRequest.count({
+      where: { ...meetingWhere, status: "APPROVED" },
+    }),
+  ]);
+
+  const completedDeliveries = deliveries.filter((d) => d.status === "COMPLETED").length;
+  const activeDeliveries = deliveries.filter((d) =>
+    ["DATA_ENTERED", "IN_PROGRESS"].includes(d.status)
+  ).length;
+
+  if (!canFinance) {
+    return {
+      financePermitted: false as const,
+      beneficiariesEnrolled: beneficiaryCount,
+      completedDeliveries,
+      activeDeliveries,
+      meetingsApproved,
+    };
+  }
 
   const dateFilter = buildDateFilter(filters.from, filters.to);
   const [donations, expenses] = await Promise.all([
@@ -298,6 +335,10 @@ async function fetchFinanceAnalytics(
     donationCount: donations.length,
     expensesTotal: expenses.reduce((s, e) => s + Number(e.amount), 0),
     volunteerHours,
+    beneficiariesEnrolled: beneficiaryCount,
+    completedDeliveries,
+    activeDeliveries,
+    meetingsApproved,
   };
 }
 

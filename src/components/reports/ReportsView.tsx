@@ -48,7 +48,7 @@ import {
   ReportExportContext,
 } from "@/lib/reportExport";
 import { ReportDashboardCharts } from "@/components/reports/ReportDashboardCharts";
-import { ImpactReportPreview } from "@/components/reports/ImpactReportPreview";
+import { ImpactReportPreview, ImpactReportProviderBadge } from "@/components/reports/ImpactReportPreview";
 import { DashboardViewId, LIVE_REFRESH_MS } from "@/lib/report-dashboards";
 import { computeCohortReport, exportCohortReportExcel } from "@/lib/cohortReport";
 import { AnalyticsOverview } from "@/lib/analytics";
@@ -139,7 +139,7 @@ export function ReportsView({ canExport }: ReportsViewProps) {
   const [dashboardMeetings, setDashboardMeetings] = useState<MeetingExportRow[]>([]);
 
   const [aiNarrative, setAiNarrative] = useState("");
-  const [aiProvider, setAiProvider] = useState<"groq" | "gemini" | "template" | null>(null);
+  const [aiProvider, setAiProvider] = useState<"groq" | "gemini" | "openai" | "template" | null>(null);
   const [impactReport, setImpactReport] = useState<ImpactReportResult | null>(null);
   const [generating, setGenerating] = useState(false);
   const [impactExporting, setImpactExporting] = useState<"pdf" | "word" | "md" | null>(null);
@@ -476,6 +476,23 @@ export function ReportsView({ canExport }: ReportsViewProps) {
             overallPct: achievementOverview.overallPct,
             byStatus: achievementOverview.byStatus,
           },
+          sdgBreakdown: achievementOverview.bySdg.map((s) => ({
+            sdgId: s.sdgId,
+            projectCount: s.projectCount,
+            achievedBeneficiaries: s.achievedBeneficiaries,
+            targetBeneficiaries: s.targetBeneficiaries,
+            overallPct: s.overallPct,
+          })),
+          cohortSummary: (() => {
+            const cohort = computeCohortReport(dashboardBeneficiaries, projectTitles);
+            return {
+              taggedBeneficiaries: cohort.taggedBeneficiaries,
+              topCohorts: cohort.byCohort.slice(0, 5).map((c) => ({
+                label: c.label,
+                count: c.count,
+              })),
+            };
+          })(),
         }),
       });
       const data = (await res.json()) as ImpactReportResult & { error?: string };
@@ -864,9 +881,9 @@ export function ReportsView({ canExport }: ReportsViewProps) {
           <Card className="p-5">
             <CardTitle className="text-base">AI Impact Report</CardTitle>
             <p className="mt-1 text-sm text-slate-500">
-              Generate a structured, donor- and board-ready impact report from your current filters.
-              Includes executive summary, program activities, beneficiary impact, KPI progress,
-              financial highlights (when permitted), and recommendations — with chart exports.
+              Advanced AI impact engine analyzes your filtered data using the logframe model —
+              inputs, outputs, outcomes, insights, SDG contribution, and long-term impact.
+              Export donor-ready PDF, Word, or Markdown with embedded charts.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
@@ -907,14 +924,7 @@ export function ReportsView({ canExport }: ReportsViewProps) {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <CardTitle className="text-base">Impact Report Preview</CardTitle>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Provider:{" "}
-                    {impactReport.provider === "groq"
-                      ? "Groq (Llama)"
-                      : impactReport.provider === "gemini"
-                        ? "Google Gemini"
-                        : "Built-in template (add GROQ_API_KEY or GEMINI_API_KEY for AI)"}
-                  </p>
+                  <ImpactReportProviderBadge report={impactReport} />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -962,7 +972,10 @@ export function ReportsView({ canExport }: ReportsViewProps) {
                 </div>
               </div>
               <div className="mt-4 max-h-[560px] overflow-auto">
-                <ImpactReportPreview narrative={impactReport.narrative} />
+                <ImpactReportPreview
+                  narrative={impactReport.narrative}
+                  sections={impactReport.sections}
+                />
               </div>
             </Card>
           )}
@@ -974,11 +987,13 @@ export function ReportsView({ canExport }: ReportsViewProps) {
                   <CardTitle className="text-base">Generated Report</CardTitle>
                   <p className="mt-1 text-xs text-slate-500">
                     Provider:{" "}
-                    {aiProvider === "groq"
-                      ? "Groq (Llama — free tier)"
-                      : aiProvider === "gemini"
-                        ? "Google Gemini (free tier)"
-                        : "Built-in template (add GROQ_API_KEY or GEMINI_API_KEY for AI)"}
+                    {aiProvider === "openai"
+                      ? "OpenAI"
+                      : aiProvider === "groq"
+                        ? "Groq (Llama)"
+                        : aiProvider === "gemini"
+                          ? "Google Gemini"
+                          : "Built-in template (add OPENAI_API_KEY, GROQ_API_KEY, or GEMINI_API_KEY)"}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">

@@ -1,3 +1,12 @@
+import {
+  generateImpactAnalysis,
+  polishImpactNarrative,
+  resolveAiEngine,
+  callAiEngine,
+  getAiEngineLabel,
+  type ImpactAnalysisJson,
+} from "@/lib/ai-engine";
+
 export type ReportType =
   | "beneficiaries"
   | "activities"
@@ -33,6 +42,10 @@ export interface ImpactReportPayload extends ReportFilterPayload {
     volunteerHours?: number | null;
     urgentCases?: number;
     caseStudies?: number;
+    beneficiariesEnrolled?: number;
+    completedDeliveries?: number;
+    activeDeliveries?: number;
+    meetingsApproved?: number;
     financePermitted?: boolean;
   };
   achievementDetail?: {
@@ -41,23 +54,44 @@ export interface ImpactReportPayload extends ReportFilterPayload {
     beneficiaryPct?: number | null;
     overallPct?: number | null;
   };
+  sdgBreakdown?: Array<{
+    sdgId: number;
+    projectCount: number;
+    achievedBeneficiaries: number;
+    targetBeneficiaries: number;
+    overallPct: number | null;
+  }>;
+  cohortSummary?: {
+    taggedBeneficiaries: number;
+    topCohorts: Array<{ label: string; count: number }>;
+  };
   charts?: ImpactChartData;
+}
+
+export interface ImpactReportSections {
+  executiveSummary: string;
+  inputs: string;
+  outputs: string;
+  outcomes: string;
+  insights: string[];
+  impact: string;
+  sdgContribution: string;
+  lessonsLearned: string;
+  programActivities: string;
+  beneficiaryImpact: string;
+  kpiProgress: string;
+  financialHighlights?: string;
+  recommendations: string;
 }
 
 export interface ImpactReportResult {
   narrative: string;
-  provider: "groq" | "gemini" | "template";
+  provider: "groq" | "gemini" | "openai" | "template";
+  aiModel?: string;
   generatedAt: string;
   filterSummary: string;
   charts: ImpactChartData;
-  sections: {
-    executiveSummary: string;
-    programActivities: string;
-    beneficiaryImpact: string;
-    kpiProgress: string;
-    financialHighlights?: string;
-    recommendations: string;
-  };
+  sections: ImpactReportSections;
 }
 
 export interface ReportFilterPayload {
@@ -105,7 +139,8 @@ export interface ReportDataSnapshot {
 
 export interface AiReportResult {
   narrative: string;
-  provider: "groq" | "gemini" | "template";
+  provider: "groq" | "gemini" | "openai" | "template";
+  aiModel?: string;
   snapshot: ReportDataSnapshot;
 }
 
@@ -197,61 +232,6 @@ export function buildTemplateNarrative(snapshot: ReportDataSnapshot): string {
   return lines.join("\n");
 }
 
-async function callGroq(prompt: string): Promise<string | null> {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return null;
-
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an NGO impact reporting assistant. Write clear, professional reports for donors and management. Use markdown headings. Be factual — only use data provided. Keep reports under 600 words.",
-        },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.4,
-      max_tokens: 1200,
-    }),
-  });
-
-  if (!res.ok) return null;
-  const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  return data.choices?.[0]?.message?.content?.trim() ?? null;
-}
-
-async function callGemini(prompt: string): Promise<string | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 1200 },
-      }),
-    }
-  );
-
-  if (!res.ok) return null;
-  const data = (await res.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
-}
-
 function buildAiPrompt(snapshot: ReportDataSnapshot): string {
   return `Generate an NGO impact report based on this data:
 
@@ -273,18 +253,27 @@ Write a professional report with: Executive Summary, Impact Analysis, Key Observ
 
 export async function generateAiNarrative(snapshot: ReportDataSnapshot): Promise<AiReportResult> {
   const prompt = buildAiPrompt(snapshot);
+  const config = resolveAiEngine();
 
-  if (process.env.GROQ_API_KEY) {
-    const narrative = await callGroq(prompt);
-    if (narrative) {
-      return { narrative, provider: "groq", snapshot };
-    }
-  }
-
-  if (process.env.GEMINI_API_KEY) {
-    const narrative = await callGemini(prompt);
-    if (narrative) {
-      return { narrative, provider: "gemini", snapshot };
+  if (config.provider !== "template") {
+    const result = await callAiEngine({
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an NGO impact reporting assistant. Write clear, professional reports for donors and management. Use markdown headings. Be factual — only use data provided. Include sections: Executive Summary, Outputs & Outcomes, Key Insights, and Recommendations.",
+        },
+        { role: "user", content: prompt },
+      ],
+      maxTokens: 2000,
+    });
+    if (result) {
+      return {
+        narrative: result.content,
+        provider: result.provider,
+        aiModel: result.model,
+        snapshot,
+      };
     }
   }
 
@@ -300,29 +289,131 @@ function formatDateRange(from?: string, to?: string): string {
   return "the reporting period";
 }
 
-function buildImpactSections(payload: ImpactReportPayload): ImpactReportResult["sections"] {
+function buildImpactSections(payload: ImpactReportPayload): ImpactReportSections {
   const activities = payload.activities ?? [];
   const summary = payload.achievementSummary;
   const analytics = payload.analytics;
   const completed = activities.filter((a) => a.status === "completed").length;
+  const inProgress = activities.filter((a) => ["assigned", "active"].includes(a.status)).length;
   const beneficiariesReached = activities.reduce(
     (s, a) => s + (a.beneficiaryCount ?? 0),
     0
   );
+  const completionRate =
+    activities.length > 0 ? Math.round((completed / activities.length) * 100) : 0;
   const dateRange = formatDateRange(payload.from, payload.to);
   const projectLabel = payload.projectTitle ?? (payload.projectId ? "selected project" : "all programs");
 
   const executiveSummary = [
     `During ${dateRange}, the organization delivered measurable impact across ${projectLabel}. `,
-    `Field teams completed ${completed} of ${activities.length} tracked activities, directly reaching ${beneficiariesReached.toLocaleString("en-IN")} beneficiaries through camps, workshops, and outreach.`,
+    `Field teams completed ${completed} of ${activities.length} tracked activities (${completionRate}% completion rate), directly reaching ${beneficiariesReached.toLocaleString("en-IN")} beneficiaries through camps, workshops, and outreach.`,
     summary
       ? ` Overall program KPI attainment stands at ${summary.achievedActivities}/${summary.targetActivities} activities and ${summary.achievedBeneficiaries}/${summary.targetBeneficiaries} beneficiaries across ${summary.projectCount} active projects.`
       : "",
   ].join("");
 
+  const inputs = [
+    `Program delivery during ${dateRange} mobilized field teams across ${activities.length} planned activities.`,
+    analytics?.volunteerHours != null
+      ? ` Volunteers contributed ${Math.round(analytics.volunteerHours)} logged hours as a key input extending reach.`
+      : "",
+    analytics?.financePermitted && analytics.donationsTotal != null
+      ? ` Financial inputs included ${formatInr(analytics.donationsTotal)} in donor contributions across ${analytics.donationCount ?? 0} gifts.`
+      : "",
+    analytics?.meetingsApproved != null
+      ? ` ${analytics.meetingsApproved} calendar events were approved to coordinate planning and stakeholder engagement.`
+      : "",
+  ].join("");
+
+  const outputs = [
+    `Direct program outputs include ${completed} completed field activities and ${beneficiariesReached.toLocaleString("en-IN")} beneficiaries reached through on-ground service delivery.`,
+    analytics?.beneficiariesEnrolled != null
+      ? ` ${analytics.beneficiariesEnrolled.toLocaleString("en-IN")} beneficiaries are enrolled in the service portal for ongoing case management.`
+      : "",
+    analytics?.completedDeliveries != null
+      ? ` ${analytics.completedDeliveries} service deliveries were completed; ${analytics.activeDeliveries ?? 0} remain in active pipeline.`
+      : "",
+    inProgress > 0 ? ` ${inProgress} activities are currently assigned or in progress.` : "",
+  ].join("");
+
+  const outcomes = summary
+    ? [
+        `Outcome-level progress shows ${summary.achievedBeneficiaries.toLocaleString("en-IN")} of ${summary.targetBeneficiaries.toLocaleString("en-IN")} target beneficiaries reached`,
+        ` and ${summary.achievedActivities.toLocaleString("en-IN")} of ${summary.targetActivities.toLocaleString("en-IN")} planned activities delivered.`,
+        payload.achievementDetail?.overallPct != null
+          ? ` Consolidated milestone attainment is ${payload.achievementDetail.overallPct}%.`
+          : "",
+        analytics?.urgentCases
+          ? ` ${analytics.urgentCases} urgent cases received prioritized attention.`
+          : "",
+      ].join(" ")
+    : `Field teams reached ${beneficiariesReached.toLocaleString("en-IN")} beneficiaries; configure project milestones to track formal outcome indicators.`;
+
+  const insights: string[] = [];
+  if (activities.length > 0) {
+    insights.push(
+      `${completionRate}% of field activities were completed in the reporting period (${completed}/${activities.length}).`
+    );
+  }
+  if (beneficiariesReached > 0) {
+    insights.push(
+      `Direct outreach reached ${beneficiariesReached.toLocaleString("en-IN")} beneficiaries through field activities.`
+    );
+  }
+  if (summary && summary.targetBeneficiaries > 0) {
+    insights.push(
+      `Beneficiary KPI attainment is ${pct(summary.achievedBeneficiaries, summary.targetBeneficiaries)} against program targets.`
+    );
+  }
+  if (analytics?.urgentCases) {
+    insights.push(`${analytics.urgentCases} beneficiaries are flagged as urgent cases requiring accelerated support.`);
+  }
+  if (payload.cohortSummary?.topCohorts.length) {
+    const top = payload.cohortSummary.topCohorts[0];
+    insights.push(
+      `Special-group outreach: ${top.label} is the largest tagged cohort with ${top.count} beneficiaries.`
+    );
+  }
+  if (payload.sdgBreakdown?.length) {
+    const sdgIds = payload.sdgBreakdown.map((s) => `SDG ${s.sdgId}`).join(", ");
+    insights.push(`Program work aligns with ${sdgIds} across ${payload.sdgBreakdown.length} SDG mapping(s).`);
+  }
+  if (insights.length === 0) {
+    insights.push("Broaden date or project filters to surface more data-driven insights.");
+  }
+
+  const impact = [
+    `Sustained community impact depends on converting ${completed} completed activities into lasting beneficiary outcomes.`,
+    analytics?.caseStudies
+      ? ` ${analytics.caseStudies} documented case studies provide qualitative evidence of life changes.`
+      : "",
+    ` Continued investment in milestone tracking, service completion, and equitable cohort outreach will strengthen long-term program impact.`,
+  ].join("");
+
+  const sdgContribution =
+    payload.sdgBreakdown && payload.sdgBreakdown.length > 0
+      ? payload.sdgBreakdown
+          .map(
+            (s) =>
+              `SDG ${s.sdgId}: ${s.projectCount} project(s), ${s.achievedBeneficiaries}/${s.targetBeneficiaries} beneficiaries (${s.overallPct != null ? `${s.overallPct}%` : "tracking"})`
+          )
+          .join(". ") + "."
+      : "Link projects to SDG goals in project setup to enable automated SDG contribution reporting.";
+
+  const lessonsLearned = [
+    completionRate >= 70
+      ? "Strong activity completion rates indicate effective field coordination."
+      : completionRate > 0
+        ? "Activity completion rates suggest room to improve scheduling and follow-through on assigned tasks."
+        : "Limited activity data in this period — review filters and field data entry practices.",
+    analytics?.activeDeliveries
+      ? ` ${analytics.activeDeliveries} active service deliveries require continued monitoring to convert outputs into completed outcomes.`
+      : "",
+  ].join("");
+
   const programActivities = [
     `Program teams executed ${activities.length} field activities during the reporting window.`,
-    `Of these, ${completed} were completed and ${activities.filter((a) => ["assigned", "active"].includes(a.status)).length} remain in progress or assigned.`,
+    `Of these, ${completed} were completed and ${inProgress} remain in progress or assigned.`,
     activities.length > 0
       ? ` Representative work included ${activities
           .slice(0, 3)
@@ -336,7 +427,9 @@ function buildImpactSections(payload: ImpactReportPayload): ImpactReportResult["
     analytics?.urgentCases != null
       ? ` Among enrolled beneficiaries in the database, ${analytics.urgentCases} are flagged as urgent cases and ${analytics.caseStudies ?? 0} as case studies for deeper documentation.`
       : "",
-    ` Continued emphasis on disaggregated reporting by category and special cohort groups ensures equitable outreach and funder accountability.`,
+    payload.cohortSummary?.taggedBeneficiaries
+      ? ` ${payload.cohortSummary.taggedBeneficiaries} beneficiaries carry special-group cohort tags for disaggregated equity reporting.`
+      : "",
   ].join("");
 
   const kpiProgress = summary
@@ -346,7 +439,6 @@ function buildImpactSections(payload: ImpactReportPayload): ImpactReportResult["
         payload.achievementDetail?.overallPct != null
           ? ` Consolidated progress is ${payload.achievementDetail.overallPct}% against program targets.`
           : "",
-        ` Program managers should review at-risk milestones and accelerate completion where gaps persist.`,
       ].join(" ")
     : "KPI milestones have not been configured for filtered projects. Set up project milestones to enable outcome tracking.";
 
@@ -355,20 +447,23 @@ function buildImpactSections(payload: ImpactReportPayload): ImpactReportResult["
     financialHighlights = [
       analytics.donationsTotal != null
         ? `Donors contributed ${formatInr(analytics.donationsTotal)} across ${analytics.donationCount ?? 0} recorded gifts.`
-        : "Donation data is available for the filtered period.",
+        : "",
       analytics.expensesTotal != null
         ? ` Approved program expenses totalled ${formatInr(analytics.expensesTotal)}.`
         : "",
       analytics.volunteerHours != null
         ? ` Volunteers contributed ${Math.round(analytics.volunteerHours)} logged hours, extending program reach at minimal cost.`
         : "",
-    ].join(" ");
+    ]
+      .filter(Boolean)
+      .join(" ");
   }
 
   const recommendations = [
     "Prioritize completion of in-progress field activities and document beneficiary outcomes with evidence attachments.",
     "Review urgent cases and overdue service rechecks weekly to maintain quality of care.",
     "Share KPI progress with project coordinators and align milestone timelines with donor reporting cycles.",
+    "Use disaggregated cohort and SDG data in funder reports to demonstrate equitable impact.",
     analytics?.financePermitted
       ? "Maintain transparent fund utilization records for board and donor accountability."
       : "Ensure field data is synced so server-side beneficiary records reflect all outreach.",
@@ -376,12 +471,74 @@ function buildImpactSections(payload: ImpactReportPayload): ImpactReportResult["
 
   return {
     executiveSummary,
+    inputs,
+    outputs,
+    outcomes,
+    insights,
+    impact,
+    sdgContribution,
+    lessonsLearned,
     programActivities,
     beneficiaryImpact,
     kpiProgress,
     financialHighlights,
     recommendations,
   };
+}
+
+function sectionsToAnalysis(sections: ImpactReportSections): ImpactAnalysisJson {
+  return {
+    executiveSummary: sections.executiveSummary,
+    inputs: sections.inputs,
+    outputs: sections.outputs,
+    outcomes: sections.outcomes,
+    insights: sections.insights,
+    impact: sections.impact,
+    sdgContribution: sections.sdgContribution,
+    lessonsLearned: sections.lessonsLearned,
+    programActivities: sections.programActivities,
+    beneficiaryImpact: sections.beneficiaryImpact,
+    kpiProgress: sections.kpiProgress,
+    financialHighlights: sections.financialHighlights,
+    recommendations: sections.recommendations,
+  };
+}
+
+function analysisToSections(analysis: ImpactAnalysisJson): ImpactReportSections {
+  return {
+    executiveSummary: analysis.executiveSummary,
+    inputs: analysis.inputs,
+    outputs: analysis.outputs,
+    outcomes: analysis.outcomes,
+    insights: analysis.insights,
+    impact: analysis.impact,
+    sdgContribution: analysis.sdgContribution,
+    lessonsLearned: analysis.lessonsLearned,
+    programActivities: analysis.programActivities,
+    beneficiaryImpact: analysis.beneficiaryImpact,
+    kpiProgress: analysis.kpiProgress,
+    financialHighlights: analysis.financialHighlights,
+    recommendations: analysis.recommendations,
+  };
+}
+
+function buildImpactDataContext(payload: ImpactReportPayload, sections: ImpactReportSections): string {
+  return JSON.stringify(
+    {
+      period: formatDateRange(payload.from, payload.to),
+      project: payload.projectTitle ?? payload.projectId ?? "all",
+      filterSummary: payload.filterSummary,
+      activities: payload.activities?.slice(0, 15),
+      achievementSummary: payload.achievementSummary,
+      achievementDetail: payload.achievementDetail,
+      analytics: payload.analytics,
+      sdgBreakdown: payload.sdgBreakdown,
+      cohortSummary: payload.cohortSummary,
+      templateSections: sections,
+    },
+    null,
+    2
+  );
 }
 
 function formatInr(value: number): string {
@@ -394,27 +551,35 @@ function formatInr(value: number): string {
 
 export function buildImpactTemplateNarrative(
   payload: ImpactReportPayload,
-  sections: ImpactReportResult["sections"]
+  sections: ImpactReportSections
 ): string {
   const dateRange = formatDateRange(payload.from, payload.to);
-  const projectLine = payload.projectTitle
-    ? `**Project:** ${payload.projectTitle}`
-    : payload.projectId
-      ? "**Project filter applied**"
-      : "**Scope:** Organization-wide";
+  const scope = payload.projectTitle ?? (payload.projectId ? "Filtered project" : "Organization-wide");
 
   const lines: string[] = [
     "# NGO Impact Report",
     "",
-    `*Reporting period: ${dateRange} · ${projectLine.replace(/\*\*/g, "")}*`,
+    `*Reporting period: ${dateRange} · Scope: ${scope}*`,
     "",
     "## Executive Summary",
     "",
     sections.executiveSummary,
     "",
+    "## Inputs & Resources Deployed",
+    "",
+    sections.inputs,
+    "",
     "## Program Activities",
     "",
     sections.programActivities,
+    "",
+    "## Outputs & Deliverables",
+    "",
+    sections.outputs,
+    "",
+    "## Outcomes & Measurable Change",
+    "",
+    sections.outcomes,
     "",
     "## Beneficiary Impact",
     "",
@@ -423,6 +588,22 @@ export function buildImpactTemplateNarrative(
     "## KPI & Milestone Progress",
     "",
     sections.kpiProgress,
+    "",
+    "## Key Insights",
+    "",
+    ...sections.insights.map((i) => `- ${i}`),
+    "",
+    "## Long-term Impact",
+    "",
+    sections.impact,
+    "",
+    "## SDG Contribution",
+    "",
+    sections.sdgContribution,
+    "",
+    "## Lessons Learned",
+    "",
+    sections.lessonsLearned,
     "",
   ];
 
@@ -433,7 +614,7 @@ export function buildImpactTemplateNarrative(
   lines.push(
     "## Recommendations",
     "",
-    ...sections.recommendations.split(". ").filter(Boolean).map((r) => `- ${r.trim().replace(/\.$/, "")}.`),
+    sections.recommendations,
     "",
     "---",
     "",
@@ -443,88 +624,10 @@ export function buildImpactTemplateNarrative(
   return lines.join("\n");
 }
 
-function buildImpactAiPrompt(
-  payload: ImpactReportPayload,
-  sections: ImpactReportResult["sections"]
-): string {
-  return `You are writing a donor- and board-ready NGO impact report. Use ONLY the facts below. Write rich, multi-paragraph prose (not bullet lists) for each section. Use markdown with ## headings.
-
-Reporting period: ${formatDateRange(payload.from, payload.to)}
-Project: ${payload.projectTitle ?? payload.projectId ?? "all programs"}
-Filter: ${payload.filterSummary ?? "none"}
-
-Draft section content (expand and polish — add connective narrative, keep all numbers accurate):
-- Executive Summary: ${sections.executiveSummary}
-- Program Activities: ${sections.programActivities}
-- Beneficiary Impact: ${sections.beneficiaryImpact}
-- KPI Progress: ${sections.kpiProgress}
-${sections.financialHighlights ? `- Financial Highlights: ${sections.financialHighlights}` : ""}
-- Recommendations: ${sections.recommendations}
-
-Activity stats: ${JSON.stringify(payload.activities?.slice(0, 10) ?? [])}
-Achievement summary: ${JSON.stringify(payload.achievementSummary ?? {})}
-Analytics: ${JSON.stringify(payload.analytics ?? {})}
-
-Write sections: Executive Summary, Program Activities, Beneficiary Impact, KPI & Milestone Progress${sections.financialHighlights ? ", Financial Highlights" : ""}, and Recommendations. Each section should be 2-4 paragraphs. Professional tone for Indian NGO context. Under 900 words total.`;
-}
-
-async function callGroqImpact(prompt: string): Promise<string | null> {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return null;
-
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an expert NGO impact reporting writer for Indian nonprofits. Write polished, factual donor-ready reports in markdown. Never invent statistics.",
-        },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.35,
-      max_tokens: 2000,
-    }),
-  });
-
-  if (!res.ok) return null;
-  const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  return data.choices?.[0]?.message?.content?.trim() ?? null;
-}
-
-async function callGeminiImpact(prompt: string): Promise<string | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.35, maxOutputTokens: 2000 },
-      }),
-    }
-  );
-
-  if (!res.ok) return null;
-  const data = (await res.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
-}
+export { getAiEngineLabel };
 
 export async function generateImpactReport(payload: ImpactReportPayload): Promise<ImpactReportResult> {
-  const sections = buildImpactSections(payload);
+  const templateSections = buildImpactSections(payload);
   const charts: ImpactChartData = payload.charts ?? {
     activityStatus: [],
     beneficiaryCategory: [],
@@ -542,42 +645,45 @@ export async function generateImpactReport(payload: ImpactReportPayload): Promis
   };
 
   const filterSummary = payload.filterSummary ?? "All data";
-  const prompt = buildImpactAiPrompt(payload, sections);
+  const dataContext = buildImpactDataContext(payload, templateSections);
+  const config = resolveAiEngine();
 
-  if (process.env.GROQ_API_KEY) {
-    const narrative = await callGroqImpact(prompt);
-    if (narrative) {
+  if (config.provider !== "template") {
+    const analysisResult = await generateImpactAnalysis(dataContext);
+    if (analysisResult) {
+      const sections = analysisToSections(analysisResult.analysis);
+      const polished = await polishImpactNarrative(analysisResult.analysis, dataContext);
       return {
-        narrative,
-        provider: "groq",
+        narrative: polished?.narrative ?? buildImpactTemplateNarrative(payload, sections),
+        provider: analysisResult.provider,
+        aiModel: analysisResult.model,
         generatedAt: new Date().toISOString(),
         filterSummary,
         charts,
         sections,
       };
     }
-  }
 
-  if (process.env.GEMINI_API_KEY) {
-    const narrative = await callGeminiImpact(prompt);
-    if (narrative) {
+    const polished = await polishImpactNarrative(sectionsToAnalysis(templateSections), dataContext);
+    if (polished) {
       return {
-        narrative,
-        provider: "gemini",
+        narrative: polished.narrative,
+        provider: polished.provider,
+        aiModel: polished.model,
         generatedAt: new Date().toISOString(),
         filterSummary,
         charts,
-        sections,
+        sections: templateSections,
       };
     }
   }
 
   return {
-    narrative: buildImpactTemplateNarrative(payload, sections),
+    narrative: buildImpactTemplateNarrative(payload, templateSections),
     provider: "template",
     generatedAt: new Date().toISOString(),
     filterSummary,
     charts,
-    sections,
+    sections: templateSections,
   };
 }
