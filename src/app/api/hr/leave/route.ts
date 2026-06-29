@@ -3,13 +3,15 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/role-features";
 import { leaveApplicationSchema, leaveActionSchema } from "@/lib/validators";
-import { parseDateOnly } from "@/lib/hr-utils";
-import { decimalToNumber } from "@/lib/hr-utils";
-
-function countLeaveDays(start: Date, end: Date) {
-  const ms = end.getTime() - start.getTime();
-  return Math.floor(ms / (1000 * 60 * 60 * 24)) + 1;
-}
+import { parseDateOnly, decimalToNumber } from "@/lib/hr-utils";
+import { initLeaveBalance, serializePolicyFromDb } from "@/lib/hr-profile";
+import {
+  buildLeaveBalanceSummary,
+  countLeaveDays,
+  getLeaveTypeBalance,
+  sumPendingLeaveDays,
+  type LeaveTypeCode,
+} from "@/lib/leave-balance";
 
 export async function GET(request: Request) {
   const currentUser = await getCurrentUser();
@@ -20,12 +22,29 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const viewAll = searchParams.get("all") === "1" && hasFeature(currentUser.role, "hr.manage");
 
+  const year = new Date().getFullYear();
+
   const profile = await prisma.employeeProfile.findUnique({
     where: { userId: currentUser.id },
     include: {
-      leaveBalances: { where: { year: new Date().getFullYear() } },
+      leaveBalances: { where: { year } },
     },
   });
+
+  let balanceRecord = profile?.leaveBalances[0] ?? null;
+  if (profile && !balanceRecord) {
+    const settings = await prisma.hrPolicySettings.findUniqueOrThrow({ where: { id: "default" } });
+    await initLeaveBalance(prisma, profile.id, serializePolicyFromDb(settings).leave, year);
+    balanceRecord = await prisma.employeeLeaveBalance.findUnique({
+      where: { employeeProfileId_year: { employeeProfileId: profile.id, year } },
+    });
+  }
+
+  const pendingApplications = profile
+    ? await prisma.leaveApplication.findMany({
+        where: { employeeProfileId: profile.id, status: "PENDING" },
+      })
+    : [];
 
   const applications = viewAll
     ? await prisma.leaveApplication.findMany({
@@ -49,17 +68,12 @@ export async function GET(request: Request) {
         })
       : [];
 
-  const balance = profile?.leaveBalances[0] ?? null;
+  const balance = balanceRecord
+    ? buildLeaveBalanceSummary(balanceRecord, sumPendingLeaveDays(pendingApplications, year))
+    : null;
 
   return NextResponse.json({
-    balance: balance
-      ? {
-          year: balance.year,
-          casual: { total: balance.casualLeaveTotal, used: balance.casualLeaveUsed },
-          sick: { total: balance.sickLeaveTotal, used: balance.sickLeaveUsed },
-          earned: { total: balance.earnedLeaveTotal, used: balance.earnedLeaveUsed },
-        }
-      : null,
+    balance,
     applications: applications.map((a) => ({
       id: a.id,
       leaveType: a.leaveType,
@@ -99,6 +113,38 @@ export async function POST(request: Request) {
   }
 
   const days = countLeaveDays(startDate, endDate);
+  const year = startDate.getFullYear();
+  const leaveType = parsed.data.leaveType as LeaveTypeCode;
+
+  let balanceRecord = await prisma.employeeLeaveBalance.findUnique({
+    where: { employeeProfileId_year: { employeeProfileId: profile.id, year } },
+  });
+
+  if (!balanceRecord) {
+    const settings = await prisma.hrPolicySettings.findUniqueOrThrow({ where: { id: "default" } });
+    await initLeaveBalance(prisma, profile.id, serializePolicyFromDb(settings).leave, year);
+    balanceRecord = await prisma.employeeLeaveBalance.findUniqueOrThrow({
+      where: { employeeProfileId_year: { employeeProfileId: profile.id, year } },
+    });
+  }
+
+  const pendingApplications = await prisma.leaveApplication.findMany({
+    where: { employeeProfileId: profile.id, status: "PENDING" },
+  });
+  const summary = buildLeaveBalanceSummary(
+    balanceRecord,
+    sumPendingLeaveDays(pendingApplications, year)
+  );
+  const typeBalance = getLeaveTypeBalance(summary, leaveType);
+
+  if (days > typeBalance.available) {
+    return NextResponse.json(
+      {
+        error: `Insufficient ${leaveType} balance. ${typeBalance.available} day(s) available (${typeBalance.used} used, ${typeBalance.pending} pending approval).`,
+      },
+      { status: 400 }
+    );
+  }
 
   const application = await prisma.leaveApplication.create({
     data: {
