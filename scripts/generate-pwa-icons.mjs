@@ -47,14 +47,22 @@ mkdirSync(outDir, { recursive: true });
 
 const emblem = await loadEmblem();
 
-const [icon192, icon512, iconMaskable512] = await Promise.all([
+const [icon192, icon512, iconMaskable512, favicon32, apple180] = await Promise.all([
   createIcon(emblem, 192, 0.78),
   createIcon(emblem, 512, 0.78),
   createIcon(emblem, 512, 0.62),
+  createIcon(emblem, 32, 0.82),
+  createIcon(emblem, 180, 0.78),
 ]);
 
 writeFileSync(join(outDir, "icon-192.png"), icon192);
 writeFileSync(join(outDir, "icon-512.png"), icon512);
 writeFileSync(join(outDir, "icon-maskable-512.png"), iconMaskable512);
+writeFileSync(join(outDir, "favicon-32.png"), favicon32);
 
-console.log("Generated emblem-only PWA icons from public/svitech-logo.png");
+const appDir = join(root, "src", "app");
+mkdirSync(appDir, { recursive: true });
+writeFileSync(join(appDir, "icon.png"), favicon32);
+writeFileSync(join(appDir, "apple-icon.png"), apple180);
+
+console.log("Generated emblem-only PWA + favicon icons from public/svitech-logo.png");

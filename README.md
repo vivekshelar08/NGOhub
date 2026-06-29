@@ -73,7 +73,7 @@ This validates the connection, runs `prisma db push`, seeds demo users, and prin
 Or print env vars only:
 
 ```bash
-npm run print:production-env -- "<session-pooler-uri>" "https://your-domain.com"
+npm run print:production-env -- "<session-pooler-uri>" "https://svihr.svitech.org"
 ```
 
 ### 3. Verify connectivity
@@ -131,18 +131,72 @@ Use Chrome DevTools → **Application** → **Manifest** / **Service Workers** t
 | `DIRECT_DATABASE_URL` | Same as `DATABASE_URL` |
 | `JWT_ACCESS_SECRET` | Random secret (32+ bytes) |
 | `JWT_REFRESH_SECRET` | Random secret (32+ bytes) |
-| `NEXT_PUBLIC_APP_URL` | Public URL, e.g. `https://your-domain.com` |
+| `NEXT_PUBLIC_APP_URL` | Public URL, e.g. `https://svihr.svitech.org` |
 | `NODE_ENV` | Set to `production` on Hostinger |
 | `NEXT_PUBLIC_SUPABASE_URL` | Optional — `https://[ref].supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Optional — from Supabase API settings |
 
 URL-encode special characters in the database password (`@` → `%40`, `#` → `%23`).
 
-## Deploy on Hostinger (Node.js)
+## Deploy on Hostinger — `svihr.svitech.org`
 
-1. Push this repo to GitHub
-2. Hostinger → **Websites** → **Add Website** → **Node.js** → import `vivekshelar08/NGOhub`
-3. Use these **exact** deploy settings:
+Production URL: **https://svihr.svitech.org**
+
+### 1. GitHub
+
+Repo: [github.com/vivekshelar08/NGOhub](https://github.com/vivekshelar08/NGOhub) (branch `main`)
+
+```bash
+git push origin main
+```
+
+Hostinger deploys from this repo — no extra GitHub Actions deploy workflow is required (CI only runs build + lint on push).
+
+### 2. Supabase
+
+**New project** (if the old one was deleted):
+
+1. [supabase.com](https://supabase.com) → **New project**
+2. **Database → Network** → allow all IPs (`0.0.0.0/0`)
+3. **Connect → Pooler → Session mode** (port **5432**) — copy the URI (`postgres.[ref]` user)
+4. **Project Settings → API** — copy `URL` and `anon` key
+
+**Existing project** (reusing the same database):
+
+1. Confirm **Database → Network** still allows `0.0.0.0/0`
+2. Rotate or reuse JWT secrets if you are redeploying to a new host
+
+Push schema and print env vars (run locally):
+
+```bash
+npm run setup:production-db -- "postgresql://postgres.[ref]:[PASSWORD]@aws-0-[region].pooler.supabase.com:5432/postgres"
+```
+
+Or env vars only:
+
+```bash
+npm run print:production-env -- "<session-pooler-uri>" "https://svihr.svitech.org"
+```
+
+Save the printed values — you will paste them into Hostinger in step 4.
+
+### 3. Hostinger — subdomain + Node.js app
+
+**DNS** (if `svitech.org` is on Hostinger):
+
+1. **Websites** → select `svitech.org` → **DNS / DNS Zone**
+2. Add record:
+   - **Type:** `CNAME`
+   - **Name:** `svihr`
+   - **Target:** the hostname Hostinger gives when you add the Node.js site (or your hosting target)
+3. Wait for DNS propagation (usually a few minutes)
+
+**Node.js website:**
+
+1. **Websites** → **Add Website** → **Node.js**
+2. **Import from GitHub** → authorize GitHub → select `vivekshelar08/NGOhub`, branch `main`
+3. Set domain to **`svihr.svitech.org`** (or attach the subdomain after creation)
+4. Use these **exact** deploy settings:
 
 | Setting | Value |
 |---------|--------|
@@ -155,16 +209,49 @@ Use the start command **exactly** as shown — do not use a wrapper script. Host
 
 `npm run start` is equivalent when `PORT` is set by Hostinger.
 
-4. Add **all** environment variables (required for build and runtime)
+5. Enable **HTTPS** (Hostinger usually provisions a free SSL certificate for the subdomain automatically)
 
-After the first deploy with password reset, run once from your machine (with production `DATABASE_URL`):
+### 4. Environment variables (Hostinger → your site → Environment)
+
+Paste **all** of these (from `print:production-env` or `setup:production-db`):
+
+| Variable | Example / notes |
+|----------|-----------------|
+| `DATABASE_URL` | Supabase session pooler URI (port 5432) |
+| `DIRECT_DATABASE_URL` | Same as `DATABASE_URL` |
+| `JWT_ACCESS_SECRET` | From setup script (32+ byte random) |
+| `JWT_REFRESH_SECRET` | From setup script (32+ byte random) |
+| `NEXT_PUBLIC_APP_URL` | `https://svihr.svitech.org` |
+| `NODE_ENV` | `production` |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://[ref].supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | From Supabase API settings |
+
+**Email (password reset, notifications)** — optional but recommended:
+
+| Variable | Value |
+|----------|--------|
+| `SMTP_HOST` | `smtp.hostinger.com` |
+| `SMTP_PORT` | `465` |
+| `SMTP_USER` | e.g. `hr@svitech.org` |
+| `SMTP_PASSWORD` | mailbox password |
+| `SMTP_FROM` | same as `SMTP_USER` |
+
+Redeploy after saving env vars.
+
+### 5. Post-deploy checks
+
+1. **Runtime logs** should show `▲ Next.js` and `✓ Ready`
+2. Open **https://svihr.svitech.org/login** — sign in with admin credentials
+3. **https://svihr.svitech.org/api/health** — database connectivity
+4. **https://svihr.svitech.org/api/live** — liveness (always 200)
+
+If you added password-reset or new schema changes, run once locally:
 
 ```bash
 npx prisma db push
 ```
-5. Deploy → **Runtime logs** should show `▲ Next.js` and `✓ Ready`
 
-**Intermittent 503?** Hostinger stops idle Node apps. The app self-pings `/api/live` every 4 minutes; also set up a free [UptimeRobot](https://uptimerobot.com) monitor on `https://svitech.in/api/live` every 5 minutes. `/api/health` always returns HTTP 200 so a slow database does not trigger Hostinger's error page.
+**Intermittent 503?** Hostinger stops idle Node apps. The app self-pings `/api/live` every 4 minutes; also set up a free [UptimeRobot](https://uptimerobot.com) monitor on `https://svihr.svitech.org/api/live` every 5 minutes. `/api/health` always returns HTTP 200 so a slow database does not trigger Hostinger's error page.
 
 ## API endpoints
 

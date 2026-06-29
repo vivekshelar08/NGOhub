@@ -42,7 +42,7 @@ function extractProjectRef(uri) {
 }
 
 const rawUri = process.argv[2];
-const appUrl = process.argv[3] ?? "https://your-domain.com";
+const appUrl = process.argv[3] ?? "https://svihr.svitech.org";
 
 if (!rawUri) usage();
 
