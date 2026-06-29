@@ -1012,24 +1012,114 @@ export function maxMilestoneBeneficiaryTotal(
   if (catalogItemIds.length === 0) return 0;
 
   const exclude = { milestoneId: editingMilestoneId };
+  const maxPerId = new Map(
+    catalogItemIds.map((id) => [
+      id,
+      remainingCatalogBeneficiaries(id, catalog, milestones, exclude),
+    ])
+  );
+  const sumRemaining = [...maxPerId.values()].reduce((sum, n) => sum + n, 0);
+  if (sumRemaining <= 0) return 0;
+
+  let lo = 0;
+  let hi = sumRemaining;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (milestoneBeneficiaryTotalFits(catalogItemIds, mid, catalog, maxPerId)) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return lo;
+}
+
+function milestoneBeneficiaryTotalFits(
+  catalogItemIds: string[],
+  total: number,
+  catalog: SetupCatalogItem[],
+  maxPerId: ReadonlyMap<string, number>
+): boolean {
+  if (total <= 0) return true;
+  const shares = allocateMilestoneBeneficiaryTotal(catalogItemIds, total, catalog, maxPerId);
+  const allocated = catalogItemIds.reduce((sum, id) => sum + (shares.get(id) ?? 0), 0);
+  return allocated === total;
+}
+
+/** Proportional split (largest remainder) across catalog lines — sum of shares equals total. */
+function distributeBeneficiaryTotalAmongIds(
+  catalogItemIds: string[],
+  total: number,
+  catalog: SetupCatalogItem[]
+): Map<string, number> {
+  const result = new Map<string, number>();
+  for (const id of catalogItemIds) result.set(id, 0);
+  if (catalogItemIds.length === 0 || total <= 0) return result;
+
   const weights = catalogItemIds.map((id) => {
     const item = catalog.find((c) => c.id === id);
-    return {
-      id,
-      weight: item?.totalBeneficiaries ?? 0,
-      remaining: remainingCatalogBeneficiaries(id, catalog, milestones, exclude),
-    };
+    return { id, weight: item?.totalBeneficiaries ?? 0 };
   });
-
   const weightSum = weights.reduce((sum, w) => sum + w.weight, 0);
+
   if (weightSum <= 0) {
-    return weights.reduce((sum, w) => sum + w.remaining, 0);
+    let remainder = total;
+    const per = Math.floor(total / catalogItemIds.length);
+    for (const id of catalogItemIds) {
+      const share = Math.min(per + (remainder > 0 ? 1 : 0), remainder);
+      result.set(id, share);
+      remainder -= share;
+    }
+    return result;
   }
 
-  const caps = weights.map((w) =>
-    w.weight > 0 ? Math.floor((w.remaining * weightSum) / w.weight) : w.remaining
-  );
-  return Math.max(0, Math.min(...caps));
+  const rows = weights.map((w) => ({
+    id: w.id,
+    exact: (total * w.weight) / weightSum,
+  }));
+  let floorSum = 0;
+  for (const row of rows) {
+    const floor = Math.floor(row.exact);
+    result.set(row.id, floor);
+    floorSum += floor;
+  }
+  let leftover = total - floorSum;
+  rows
+    .map((row) => ({ id: row.id, fraction: row.exact - Math.floor(row.exact) }))
+    .sort((a, b) => b.fraction - a.fraction || a.id.localeCompare(b.id))
+    .forEach((row) => {
+      if (leftover <= 0) return;
+      result.set(row.id, (result.get(row.id) ?? 0) + 1);
+      leftover--;
+    });
+  return result;
+}
+
+/** Split a milestone beneficiary total across selected catalog lines (proportional to catalog targets). */
+export function allocateMilestoneBeneficiaryTotal(
+  catalogItemIds: string[],
+  total: number,
+  catalog: SetupCatalogItem[],
+  maxPerId?: ReadonlyMap<string, number>
+): Map<string, number> {
+  const result = new Map<string, number>();
+  for (const id of catalogItemIds) result.set(id, 0);
+  if (catalogItemIds.length === 0 || total <= 0) return result;
+
+  const activeIds = maxPerId
+    ? catalogItemIds.filter((id) => (maxPerId.get(id) ?? 0) > 0)
+    : [...catalogItemIds];
+  if (activeIds.length === 0) return result;
+
+  const effectiveTotal = maxPerId
+    ? Math.min(total, activeIds.reduce((sum, id) => sum + (maxPerId.get(id) ?? 0), 0))
+    : total;
+
+  const inner = distributeBeneficiaryTotalAmongIds(activeIds, effectiveTotal, catalog);
+  for (const [id, share] of inner) {
+    result.set(id, share);
+  }
+  return result;
 }
 
 export function capCatalogItemBeneficiaries(
@@ -1114,39 +1204,19 @@ export interface CatalogRollup {
   sliceCount: number;
 }
 
-/** Split a milestone beneficiary total across selected catalog lines (proportional to catalog targets). */
-export function allocateMilestoneBeneficiaryTotal(
+export function getMilestoneBeneficiaryCaps(
   catalogItemIds: string[],
-  total: number,
-  catalog: SetupCatalogItem[]
+  catalog: SetupCatalogItem[],
+  milestones: ProjectMilestone[],
+  editingMilestoneId: string
 ): Map<string, number> {
-  const result = new Map<string, number>();
-  if (catalogItemIds.length === 0 || total <= 0) return result;
-
-  const weights = catalogItemIds.map((id) => {
-    const item = catalog.find((c) => c.id === id);
-    return { id, weight: item?.totalBeneficiaries ?? 0 };
-  });
-  const weightSum = weights.reduce((sum, w) => sum + w.weight, 0);
-
-  if (weightSum <= 0) {
-    const per = Math.floor(total / catalogItemIds.length);
-    const remainder = total - per * catalogItemIds.length;
-    catalogItemIds.forEach((id, i) => result.set(id, per + (i === 0 ? remainder : 0)));
-    return result;
-  }
-
-  let allocated = 0;
-  weights.forEach((w, i) => {
-    if (i === weights.length - 1) {
-      result.set(w.id, total - allocated);
-    } else {
-      const share = Math.floor((total * w.weight) / weightSum);
-      result.set(w.id, share);
-      allocated += share;
-    }
-  });
-  return result;
+  const exclude = { milestoneId: editingMilestoneId };
+  return new Map(
+    catalogItemIds.map((id) => [
+      id,
+      remainingCatalogBeneficiaries(id, catalog, milestones, exclude),
+    ])
+  );
 }
 
 export function computeCatalogRollups(
@@ -1219,6 +1289,98 @@ export function computeCatalogRollups(
       sliceCount: sliceCountByCatalog.get(item.id) ?? 0,
     };
   });
+}
+
+export interface CatalogAchievementTotals {
+  targetActivities: number;
+  achievedActivities: number;
+  targetBeneficiaries: number;
+  achievedBeneficiaries: number;
+}
+
+function sumKpiAchievementTotals(milestones: ProjectMilestone[]): CatalogAchievementTotals {
+  let targetActivities = 0;
+  let achievedActivities = 0;
+  let targetBeneficiaries = 0;
+  let achievedBeneficiaries = 0;
+
+  for (const milestone of milestones) {
+    for (const kpi of milestone.kpis) {
+      if (kpi.trackingMode === "activities" || kpi.trackingMode === "combined") {
+        targetActivities += kpi.activityCount;
+        achievedActivities += kpi.achievedActivityCount ?? 0;
+      }
+      if (milestone.beneficiaryMode === "inline") {
+        if (kpi.trackingMode === "beneficiaries" || kpi.trackingMode === "combined") {
+          targetBeneficiaries += kpi.beneficiaryCount;
+          achievedBeneficiaries += kpi.achievedBeneficiaries ?? 0;
+        }
+      }
+    }
+    if (milestone.beneficiaryMode === "milestone_total") {
+      targetBeneficiaries += milestone.beneficiarySummary?.totalBeneficiaries ?? 0;
+    }
+  }
+
+  return { targetActivities, achievedActivities, targetBeneficiaries, achievedBeneficiaries };
+}
+
+/**
+ * Project-wide targets/achievements counted once per catalog activity line.
+ * Multiple KPIs linked to the same catalog item still roll up per milestone for progress.
+ */
+export function computeCatalogAchievementTotals(setup: ProjectSetup): CatalogAchievementTotals {
+  const catalog = setup.catalog ?? [];
+  const milestones = setup.milestones ?? [];
+
+  if (catalog.length === 0) {
+    return sumKpiAchievementTotals(milestones);
+  }
+
+  const catalogIds = new Set(catalog.map((c) => c.id));
+  const achievedByCatalog = new Map<string, { activities: number; beneficiaries: number }>();
+  let uncataloguedTargets = { activities: 0, beneficiaries: 0 };
+  let uncataloguedAchieved = { activities: 0, beneficiaries: 0 };
+
+  for (const milestone of milestones) {
+    for (const kpi of milestone.kpis) {
+      const catalogId = resolveKpiCatalogId(kpi);
+      const tracksActivity = kpi.trackingMode === "activities" || kpi.trackingMode === "combined";
+      const tracksBeneficiary =
+        milestone.beneficiaryMode === "inline" &&
+        (kpi.trackingMode === "beneficiaries" || kpi.trackingMode === "combined");
+
+      if (catalogId && catalogIds.has(catalogId)) {
+        const row = achievedByCatalog.get(catalogId) ?? { activities: 0, beneficiaries: 0 };
+        if (tracksActivity) row.activities += kpi.achievedActivityCount ?? 0;
+        if (tracksBeneficiary) row.beneficiaries += kpi.achievedBeneficiaries ?? 0;
+        achievedByCatalog.set(catalogId, row);
+      } else {
+        if (tracksActivity) {
+          uncataloguedTargets.activities += kpi.activityCount;
+          uncataloguedAchieved.activities += kpi.achievedActivityCount ?? 0;
+        }
+        if (tracksBeneficiary) {
+          uncataloguedTargets.beneficiaries += kpi.beneficiaryCount;
+          uncataloguedAchieved.beneficiaries += kpi.achievedBeneficiaries ?? 0;
+        }
+      }
+    }
+  }
+
+  let achievedActivities = uncataloguedAchieved.activities;
+  let achievedBeneficiaries = uncataloguedAchieved.beneficiaries;
+  for (const row of achievedByCatalog.values()) {
+    achievedActivities += row.activities;
+    achievedBeneficiaries += row.beneficiaries;
+  }
+
+  return {
+    targetActivities: sumCatalogActivityCounts(catalog) + uncataloguedTargets.activities,
+    targetBeneficiaries: sumCatalogBeneficiaries(catalog) + uncataloguedTargets.beneficiaries,
+    achievedActivities,
+    achievedBeneficiaries,
+  };
 }
 
 /** @deprecated use computeCatalogRollups */

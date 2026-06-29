@@ -17,7 +17,7 @@ import {
 } from "@/lib/budgetTracking";
 import { exportDonorReportPack } from "@/lib/donorReportPack";
 import { generateUcDocx } from "@/lib/ucExport";
-import { ProjectProposal } from "@/lib/projects";
+import { computeCatalogAchievementTotals, ProjectProposal } from "@/lib/projects";
 import { cn } from "@/lib/utils";
 
 interface VaultDocument {
@@ -69,13 +69,8 @@ export function ProjectEnhancementsPanel({ projectId, project }: ProjectEnhancem
   const meRows = useMemo(() => computeMeSnapshot(project), [project]);
 
   const servicesDelivered = useMemo(() => {
-    return (
-      project.setup?.milestones?.reduce(
-        (sum, m) =>
-          sum + (m.kpis?.reduce((s, k) => s + (k.achievedActivityCount ?? 0), 0) ?? 0),
-        0
-      ) ?? 0
-    );
+    if (!project.setup) return 0;
+    return computeCatalogAchievementTotals(project.setup).achievedActivities;
   }, [project.setup]);
 
   const load = useCallback(async () => {

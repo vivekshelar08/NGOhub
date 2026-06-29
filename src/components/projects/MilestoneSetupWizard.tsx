@@ -17,6 +17,7 @@ import {
   createBlankKpi,
   createBlankMilestone,
   formatINR,
+  getMilestoneBeneficiaryCaps,
   getSetupWizardStepsForProjectType,
   initCatalogFromProposal,
   initSetupFromProposal,
@@ -207,15 +208,29 @@ export function MilestoneSetupWizard({
       milestones: prev.milestones.map((m) => {
         if (m.id !== milestoneId) return m;
         const ids = m.beneficiarySummary.catalogItemIds;
-        const nextIds = ids.includes(catalogItemId)
+        const isChecked = ids.includes(catalogItemId);
+        if (!isChecked) {
+          const remaining = remainingCatalogBeneficiaries(
+            catalogItemId,
+            prev.catalog,
+            prev.milestones,
+            { milestoneId }
+          );
+          if (remaining <= 0) return m;
+        }
+        const nextIds = isChecked
           ? ids.filter((id) => id !== catalogItemId)
           : [...ids, catalogItemId];
-        const maxTotal = maxMilestoneBeneficiaryTotal(nextIds, prev.milestones, prev.catalog, milestoneId);
+        const prunedIds = nextIds.filter(
+          (id) =>
+            remainingCatalogBeneficiaries(id, prev.catalog, prev.milestones, { milestoneId }) > 0
+        );
+        const maxTotal = maxMilestoneBeneficiaryTotal(prunedIds, prev.milestones, prev.catalog, milestoneId);
         return {
           ...m,
           beneficiarySummary: {
             ...m.beneficiarySummary,
-            catalogItemIds: nextIds,
+            catalogItemIds: prunedIds,
             totalBeneficiaries: Math.min(m.beneficiarySummary.totalBeneficiaries, maxTotal),
           },
         };
@@ -232,6 +247,10 @@ export function MilestoneSetupWizard({
       milestones: prev.milestones.map((m) => {
         if (m.id !== milestoneId) return m;
         const summary = { ...m.beneficiarySummary, ...patch };
+        summary.catalogItemIds = summary.catalogItemIds.filter(
+          (id) =>
+            remainingCatalogBeneficiaries(id, prev.catalog, prev.milestones, { milestoneId }) > 0
+        );
         const maxTotal = maxMilestoneBeneficiaryTotal(
           summary.catalogItemIds,
           prev.milestones,
@@ -435,14 +454,18 @@ export function MilestoneSetupWizard({
     const ids = activeMilestone.beneficiarySummary.catalogItemIds;
     const total = activeMilestone.beneficiarySummary.totalBeneficiaries;
     if (ids.length === 0 || total <= 0) return [];
-    const shares = allocateMilestoneBeneficiaryTotal(ids, total, setup.catalog);
+    const caps = getMilestoneBeneficiaryCaps(
+      ids,
+      setup.catalog,
+      setup.milestones,
+      activeMilestone.id
+    );
+    const shares = allocateMilestoneBeneficiaryTotal(ids, total, setup.catalog, caps);
     return ids.map((id) => {
       const item = setup.catalog.find((c) => c.id === id);
       const allotted = item?.totalBeneficiaries ?? 0;
       const share = shares.get(id) ?? 0;
-      const remaining = remainingCatalogBeneficiaries(id, setup.catalog, setup.milestones, {
-        milestoneId: activeMilestone.id,
-      });
+      const remaining = caps.get(id) ?? 0;
       return { id, name: item?.name ?? "Unnamed", allotted, share, remaining };
     });
   }, [activeMilestone, setup.catalog, setup.milestones]);
@@ -1166,38 +1189,43 @@ export function MilestoneSetupWizard({
                     <div className="space-y-2">
                       {setup.catalog.map((item) => {
                         const checked = activeMilestone.beneficiarySummary.catalogItemIds.includes(item.id);
+                        const itemRemaining = remainingCatalogBeneficiaries(
+                          item.id,
+                          setup.catalog,
+                          setup.milestones,
+                          { milestoneId: activeMilestone.id }
+                        );
+                        const disabled = !checked && itemRemaining <= 0;
                         return (
                           <label
                             key={item.id}
                             className={cn(
-                              "flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm",
+                              "flex items-center gap-3 rounded-lg border px-3 py-2 text-sm",
                               border,
+                              disabled
+                                ? "cursor-not-allowed opacity-50"
+                                : "cursor-pointer",
                               checked
                                 ? isDark
                                   ? "border-brand-teal/50 bg-brand-mist/10"
                                   : "border-brand-teal/30 bg-brand-mist"
-                                : isDark
-                                  ? "hover:bg-slate-800/50"
-                                  : "hover:bg-slate-50"
+                                : !disabled &&
+                                    (isDark ? "hover:bg-slate-800/50" : "hover:bg-slate-50")
                             )}
                           >
                             <input
                               type="checkbox"
                               checked={checked}
+                              disabled={disabled}
                               onChange={() => toggleSummaryCatalogItem(activeMilestone.id, item.id)}
-                              className="h-4 w-4 rounded border-slate-300 text-brand-teal"
+                              className="h-4 w-4 rounded border-slate-300 text-brand-teal disabled:cursor-not-allowed"
                             />
                             <span className={titleText}>
                               {item.name || "Unnamed"}
                               <span className={cn("ml-2 text-xs font-normal", muted)}>
                                 {item.totalBeneficiaries.toLocaleString("en-IN")} allotted ·{" "}
-                                {remainingCatalogBeneficiaries(
-                                  item.id,
-                                  setup.catalog,
-                                  setup.milestones,
-                                  { milestoneId: activeMilestone.id }
-                                ).toLocaleString("en-IN")}{" "}
-                                left
+                                {itemRemaining.toLocaleString("en-IN")} left
+                                {disabled ? " (full)" : ""}
                               </span>
                             </span>
                           </label>
@@ -1222,8 +1250,10 @@ export function MilestoneSetupWizard({
                       className={fieldClassName()}
                     />
                     <p className={cn("mt-1 text-xs", muted)}>
-                      Max {milestoneBeneficiaryCap.toLocaleString("en-IN")} for selected activities (distributed
-                      proportionally; cannot exceed each activity&apos;s allotment).
+                      Max {milestoneBeneficiaryCap.toLocaleString("en-IN")} for selected activities
+                      {milestoneBeneficiaryCap > 0
+                        ? " (distributed proportionally among activities with capacity)"
+                        : " — uncheck full activities or free capacity in other milestones"}
                     </p>
                     {milestoneBeneficiarySplit.length > 0 && (
                       <div className={cn("mt-3 rounded-lg border px-3 py-2 text-xs", border)}>

@@ -1,4 +1,5 @@
 import {
+  computeCatalogAchievementTotals,
   isSetupComplete,
   MilestoneKPI,
   ProjectMilestone,
@@ -231,10 +232,11 @@ export function computeProjectAchievement(project: ProjectProposal): ProjectAchi
     return rollupMilestone(milestone);
   });
 
-  const targetActivities = milestones.reduce((s, m) => s + m.targetActivities, 0);
-  const achievedActivities = milestones.reduce((s, m) => s + m.achievedActivities, 0);
-  const targetBeneficiaries = milestones.reduce((s, m) => s + m.targetBeneficiaries, 0);
-  const achievedBeneficiaries = milestones.reduce((s, m) => s + m.achievedBeneficiaries, 0);
+  const catalogTotals = computeCatalogAchievementTotals(project.setup);
+  const targetActivities = catalogTotals.targetActivities;
+  const achievedActivities = catalogTotals.achievedActivities;
+  const targetBeneficiaries = catalogTotals.targetBeneficiaries;
+  const achievedBeneficiaries = catalogTotals.achievedBeneficiaries;
   const activityPct = pct(achievedActivities, targetActivities);
   const beneficiaryPct = pct(achievedBeneficiaries, targetBeneficiaries);
   const overallPct = combinePct(activityPct, beneficiaryPct);
