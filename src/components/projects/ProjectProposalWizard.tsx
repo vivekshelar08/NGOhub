@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import {
   ADMIN_OVERHEAD_RATE,
   budgetAdminInputFromProject,
+  capActivityBeneficiaryTarget,
   computeBudgetLineTotal,
   computeBudgetTotals,
   createBlankActivity,
@@ -387,9 +388,19 @@ export function ProjectProposalWizard({
   function updateActivity(id: string, patch: Partial<ProjectActivity>) {
     setProject((prev) => ({
       ...prev,
-      activities: prev.activities.map((activity) =>
-        activity.id === id ? { ...activity, ...patch } : activity
-      ),
+      activities: prev.activities.map((activity) => {
+        if (activity.id !== id) return activity;
+        const next = { ...activity, ...patch };
+        if (patch.targetBeneficiaries !== undefined) {
+          next.targetBeneficiaries = capActivityBeneficiaryTarget(
+            prev.activities,
+            id,
+            next.targetBeneficiaries ?? 0,
+            Number(prev.totalBeneficiaries) || 0
+          );
+        }
+        return next;
+      }),
     }));
   }
 

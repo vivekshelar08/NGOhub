@@ -916,6 +916,150 @@ export function sumCatalogActivityCounts(catalog: SetupCatalogItem[]) {
   return catalog.reduce((sum, c) => sum + c.totalActivityCount, 0);
 }
 
+export interface CatalogAllocationExclude {
+  /** Omit this milestone's beneficiary/activity contributions (e.g. while editing its total). */
+  milestoneId?: string;
+  /** Omit only this KPI's inline counts within a milestone. */
+  kpiId?: string;
+}
+
+/** Sum beneficiary and activity allocations per catalog line from milestone KPIs. */
+export function accumulateCatalogAllocations(
+  milestones: ProjectMilestone[],
+  catalog: SetupCatalogItem[],
+  exclude?: CatalogAllocationExclude
+): { beneficiaries: Map<string, number>; activities: Map<string, number> } {
+  const beneficiaries = new Map<string, number>();
+  const activities = new Map<string, number>();
+
+  for (const item of catalog) {
+    beneficiaries.set(item.id, 0);
+    activities.set(item.id, 0);
+  }
+
+  for (const milestone of milestones) {
+    const skipMilestoneBeneficiary =
+      exclude?.milestoneId === milestone.id && !exclude.kpiId;
+
+    for (const kpi of milestone.kpis) {
+      if (exclude?.milestoneId === milestone.id && exclude.kpiId === kpi.id) continue;
+
+      const catalogId = resolveKpiCatalogId(kpi);
+      if (!catalogId) continue;
+
+      if (kpi.trackingMode === "activities" || kpi.trackingMode === "combined") {
+        activities.set(catalogId, (activities.get(catalogId) ?? 0) + kpi.activityCount);
+      }
+
+      if (milestone.beneficiaryMode === "inline") {
+        if (kpi.trackingMode === "beneficiaries" || kpi.trackingMode === "combined") {
+          beneficiaries.set(catalogId, (beneficiaries.get(catalogId) ?? 0) + kpi.beneficiaryCount);
+        }
+      }
+    }
+
+    if (!skipMilestoneBeneficiary && milestone.beneficiaryMode === "milestone_total") {
+      const summary = milestone.beneficiarySummary;
+      const ids = summary?.catalogItemIds ?? [];
+      const total = summary?.totalBeneficiaries ?? 0;
+      if (ids.length > 0 && total > 0) {
+        const shares = allocateMilestoneBeneficiaryTotal(ids, total, catalog);
+        for (const id of ids) {
+          beneficiaries.set(id, (beneficiaries.get(id) ?? 0) + (shares.get(id) ?? 0));
+        }
+      }
+    }
+  }
+
+  return { beneficiaries, activities };
+}
+
+export function remainingCatalogBeneficiaries(
+  catalogItemId: string,
+  catalog: SetupCatalogItem[],
+  milestones: ProjectMilestone[],
+  exclude?: CatalogAllocationExclude
+): number {
+  const item = catalog.find((c) => c.id === catalogItemId);
+  const target = item?.totalBeneficiaries ?? 0;
+  const allocated = accumulateCatalogAllocations(milestones, catalog, exclude).beneficiaries.get(
+    catalogItemId
+  );
+  return Math.max(0, target - (allocated ?? 0));
+}
+
+export function remainingCatalogActivities(
+  catalogItemId: string,
+  catalog: SetupCatalogItem[],
+  milestones: ProjectMilestone[],
+  exclude?: CatalogAllocationExclude
+): number {
+  const item = catalog.find((c) => c.id === catalogItemId);
+  const target = item?.totalActivityCount ?? 0;
+  const allocated = accumulateCatalogAllocations(milestones, catalog, exclude).activities.get(
+    catalogItemId
+  );
+  return Math.max(0, target - (allocated ?? 0));
+}
+
+/** Max milestone beneficiary total that keeps each selected catalog line within its allotment. */
+export function maxMilestoneBeneficiaryTotal(
+  catalogItemIds: string[],
+  milestones: ProjectMilestone[],
+  catalog: SetupCatalogItem[],
+  editingMilestoneId: string
+): number {
+  if (catalogItemIds.length === 0) return 0;
+
+  const exclude = { milestoneId: editingMilestoneId };
+  const weights = catalogItemIds.map((id) => {
+    const item = catalog.find((c) => c.id === id);
+    return {
+      id,
+      weight: item?.totalBeneficiaries ?? 0,
+      remaining: remainingCatalogBeneficiaries(id, catalog, milestones, exclude),
+    };
+  });
+
+  const weightSum = weights.reduce((sum, w) => sum + w.weight, 0);
+  if (weightSum <= 0) {
+    return weights.reduce((sum, w) => sum + w.remaining, 0);
+  }
+
+  const caps = weights.map((w) =>
+    w.weight > 0 ? Math.floor((w.remaining * weightSum) / w.weight) : w.remaining
+  );
+  return Math.max(0, Math.min(...caps));
+}
+
+export function capCatalogItemBeneficiaries(
+  catalog: SetupCatalogItem[],
+  itemId: string,
+  requested: number,
+  projectTarget: number
+): number {
+  const safe = Math.max(0, requested);
+  if (projectTarget <= 0) return safe;
+  const otherSum = catalog
+    .filter((c) => c.id !== itemId)
+    .reduce((sum, c) => sum + c.totalBeneficiaries, 0);
+  return Math.min(safe, Math.max(0, projectTarget - otherSum));
+}
+
+export function capActivityBeneficiaryTarget(
+  activities: ProjectActivity[],
+  activityId: string,
+  requested: number,
+  projectTotal: number
+): number {
+  const safe = Math.max(0, requested);
+  if (projectTotal <= 0) return safe;
+  const otherSum = activities
+    .filter((a) => a.id !== activityId)
+    .reduce((sum, a) => sum + (a.targetBeneficiaries ?? 0), 0);
+  return Math.min(safe, Math.max(0, projectTotal - otherSum));
+}
+
 export function createKpiFromCatalogItem(
   item: SetupCatalogItem,
   trackingMode: KpiTrackingMode = "beneficiaries"
@@ -971,7 +1115,7 @@ export interface CatalogRollup {
 }
 
 /** Split a milestone beneficiary total across selected catalog lines (proportional to catalog targets). */
-function allocateMilestoneBeneficiaryTotal(
+export function allocateMilestoneBeneficiaryTotal(
   catalogItemIds: string[],
   total: number,
   catalog: SetupCatalogItem[]

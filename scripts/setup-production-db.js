@@ -125,7 +125,7 @@ async function main() {
   console.log(`DIRECT_DATABASE_URL=${uri}`);
   console.log(`JWT_ACCESS_SECRET=${jwtAccess}`);
   console.log(`JWT_REFRESH_SECRET=${jwtRefresh}`);
-  console.log("NEXT_PUBLIC_APP_URL=https://svihr.svitech.org");
+  console.log("NEXT_PUBLIC_APP_URL=https://svihr.svitech.in");
   if (projectRef) {
     console.log(`NEXT_PUBLIC_SUPABASE_URL=https://${projectRef}.supabase.co`);
   }

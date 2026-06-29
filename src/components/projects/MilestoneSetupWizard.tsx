@@ -7,6 +7,8 @@ import { ArrowLeft, ArrowRight, CheckCircle, Plus, Trash2, Users } from "lucide-
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import {
+  allocateMilestoneBeneficiaryTotal,
+  capCatalogItemBeneficiaries,
   computeBudgetTotals,
   budgetAdminInputFromProject,
   computeMilestoneBudgetAmount,
@@ -19,11 +21,14 @@ import {
   initCatalogFromProposal,
   initSetupFromProposal,
   KpiTrackingMode,
+  maxMilestoneBeneficiaryTotal,
   MilestoneBeneficiaryMode,
   MilestoneKPI,
   ProjectMilestone,
   ProjectProposal,
   ProjectSetup,
+  remainingCatalogActivities,
+  remainingCatalogBeneficiaries,
   SetupCatalogItem,
   sumCatalogBeneficiaries,
   upsertProject,
@@ -155,7 +160,19 @@ export function MilestoneSetupWizard({
   function updateCatalogItem(id: string, patch: Partial<SetupCatalogItem>) {
     setSetup((prev) => ({
       ...prev,
-      catalog: prev.catalog.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+      catalog: prev.catalog.map((c) => {
+        if (c.id !== id) return c;
+        const next = { ...c, ...patch };
+        if (patch.totalBeneficiaries !== undefined) {
+          next.totalBeneficiaries = capCatalogItemBeneficiaries(
+            prev.catalog,
+            id,
+            next.totalBeneficiaries,
+            project.totalBeneficiaries
+          );
+        }
+        return next;
+      }),
     }));
   }
 
@@ -190,12 +207,17 @@ export function MilestoneSetupWizard({
       milestones: prev.milestones.map((m) => {
         if (m.id !== milestoneId) return m;
         const ids = m.beneficiarySummary.catalogItemIds;
-        const next = ids.includes(catalogItemId)
+        const nextIds = ids.includes(catalogItemId)
           ? ids.filter((id) => id !== catalogItemId)
           : [...ids, catalogItemId];
+        const maxTotal = maxMilestoneBeneficiaryTotal(nextIds, prev.milestones, prev.catalog, milestoneId);
         return {
           ...m,
-          beneficiarySummary: { ...m.beneficiarySummary, catalogItemIds: next },
+          beneficiarySummary: {
+            ...m.beneficiarySummary,
+            catalogItemIds: nextIds,
+            totalBeneficiaries: Math.min(m.beneficiarySummary.totalBeneficiaries, maxTotal),
+          },
         };
       }),
     }));
@@ -207,11 +229,20 @@ export function MilestoneSetupWizard({
   ) {
     setSetup((prev) => ({
       ...prev,
-      milestones: prev.milestones.map((m) =>
-        m.id !== milestoneId
-          ? m
-          : { ...m, beneficiarySummary: { ...m.beneficiarySummary, ...patch } }
-      ),
+      milestones: prev.milestones.map((m) => {
+        if (m.id !== milestoneId) return m;
+        const summary = { ...m.beneficiarySummary, ...patch };
+        const maxTotal = maxMilestoneBeneficiaryTotal(
+          summary.catalogItemIds,
+          prev.milestones,
+          prev.catalog,
+          milestoneId
+        );
+        if (summary.totalBeneficiaries > maxTotal) {
+          summary.totalBeneficiaries = maxTotal;
+        }
+        return { ...m, beneficiarySummary: summary };
+      }),
     }));
   }
 
@@ -254,14 +285,40 @@ export function MilestoneSetupWizard({
   function updateKpi(milestoneId: string, kpiId: string, patch: Partial<MilestoneKPI>) {
     setSetup((prev) => ({
       ...prev,
-      milestones: prev.milestones.map((m) =>
-        m.id !== milestoneId
-          ? m
-          : {
-              ...m,
-              kpis: m.kpis.map((k) => (k.id === kpiId ? { ...k, ...patch } : k)),
+      milestones: prev.milestones.map((m) => {
+        if (m.id !== milestoneId) return m;
+        return {
+          ...m,
+          kpis: m.kpis.map((k) => {
+            if (k.id !== kpiId) return k;
+            const next = { ...k, ...patch };
+            const catalogId = next.catalogItemId ?? k.catalogItemId;
+            const exclude = { milestoneId, kpiId };
+
+            if (patch.beneficiaryCount !== undefined && catalogId && m.beneficiaryMode === "inline") {
+              const maxBen = remainingCatalogBeneficiaries(
+                catalogId,
+                prev.catalog,
+                prev.milestones,
+                exclude
+              );
+              next.beneficiaryCount = Math.min(Math.max(0, next.beneficiaryCount), maxBen);
             }
-      ),
+
+            if (patch.activityCount !== undefined && catalogId) {
+              const maxAct = remainingCatalogActivities(
+                catalogId,
+                prev.catalog,
+                prev.milestones,
+                exclude
+              );
+              next.activityCount = Math.min(Math.max(0, next.activityCount), maxAct);
+            }
+
+            return next;
+          }),
+        };
+      }),
     }));
   }
 
@@ -362,6 +419,33 @@ export function MilestoneSetupWizard({
   const teamPool = assignableUsers.filter((u) => u.role === "STAFF" || u.role === "COORDINATOR");
   const activeMilestone =
     setup.milestones[Math.min(activeMilestoneIndex, Math.max(0, setup.milestones.length - 1))];
+
+  const milestoneBeneficiaryCap = useMemo(() => {
+    if (!activeMilestone) return 0;
+    return maxMilestoneBeneficiaryTotal(
+      activeMilestone.beneficiarySummary.catalogItemIds,
+      setup.milestones,
+      setup.catalog,
+      activeMilestone.id
+    );
+  }, [activeMilestone, setup.milestones, setup.catalog]);
+
+  const milestoneBeneficiarySplit = useMemo(() => {
+    if (!activeMilestone || activeMilestone.beneficiaryMode !== "milestone_total") return [];
+    const ids = activeMilestone.beneficiarySummary.catalogItemIds;
+    const total = activeMilestone.beneficiarySummary.totalBeneficiaries;
+    if (ids.length === 0 || total <= 0) return [];
+    const shares = allocateMilestoneBeneficiaryTotal(ids, total, setup.catalog);
+    return ids.map((id) => {
+      const item = setup.catalog.find((c) => c.id === id);
+      const allotted = item?.totalBeneficiaries ?? 0;
+      const share = shares.get(id) ?? 0;
+      const remaining = remainingCatalogBeneficiaries(id, setup.catalog, setup.milestones, {
+        milestoneId: activeMilestone.id,
+      });
+      return { id, name: item?.name ?? "Unnamed", allotted, share, remaining };
+    });
+  }, [activeMilestone, setup.catalog, setup.milestones]);
 
   return (
     <div className="p-6 md:p-8">
@@ -919,6 +1003,18 @@ export function MilestoneSetupWizard({
                           }
                           className={fieldClassName()}
                         />
+                        {kpi.catalogItemId && (
+                          <p className={cn("mt-1 text-xs", muted)}>
+                            Max{" "}
+                            {remainingCatalogBeneficiaries(
+                              kpi.catalogItemId,
+                              setup.catalog,
+                              setup.milestones,
+                              { milestoneId: activeMilestone.id, kpiId: kpi.id }
+                            ).toLocaleString("en-IN")}{" "}
+                            remaining for this activity
+                          </p>
+                        )}
                       </div>
                     ) : kpi.trackingMode === "combined" && activeMilestone.beneficiaryMode === "inline" ? (
                       <>
@@ -938,6 +1034,18 @@ export function MilestoneSetupWizard({
                             className={fieldClassName()}
                             placeholder="e.g. 4 camps"
                           />
+                          {kpi.catalogItemId && (
+                            <p className={cn("mt-1 text-xs", muted)}>
+                              Max{" "}
+                              {remainingCatalogActivities(
+                                kpi.catalogItemId,
+                                setup.catalog,
+                                setup.milestones,
+                                { milestoneId: activeMilestone.id, kpiId: kpi.id }
+                              ).toLocaleString("en-IN")}{" "}
+                              remaining for this activity
+                            </p>
+                          )}
                         </div>
                         <div>
                           <label className={cn("mb-1 block text-xs font-medium", label)}>
@@ -954,6 +1062,18 @@ export function MilestoneSetupWizard({
                             }
                             className={fieldClassName()}
                           />
+                          {kpi.catalogItemId && (
+                            <p className={cn("mt-1 text-xs", muted)}>
+                              Max{" "}
+                              {remainingCatalogBeneficiaries(
+                                kpi.catalogItemId,
+                                setup.catalog,
+                                setup.milestones,
+                                { milestoneId: activeMilestone.id, kpiId: kpi.id }
+                              ).toLocaleString("en-IN")}{" "}
+                              remaining for this activity
+                            </p>
+                          )}
                         </div>
                       </>
                     ) : kpi.trackingMode === "activities" ? (
@@ -973,6 +1093,18 @@ export function MilestoneSetupWizard({
                           className={fieldClassName()}
                           placeholder="e.g. 4 camps"
                         />
+                        {kpi.catalogItemId && (
+                          <p className={cn("mt-1 text-xs", muted)}>
+                            Max{" "}
+                            {remainingCatalogActivities(
+                              kpi.catalogItemId,
+                              setup.catalog,
+                              setup.milestones,
+                              { milestoneId: activeMilestone.id, kpiId: kpi.id }
+                            ).toLocaleString("en-IN")}{" "}
+                            remaining for this activity
+                          </p>
+                        )}
                       </div>
                     ) : null}
                   </div>
@@ -1055,7 +1187,19 @@ export function MilestoneSetupWizard({
                               onChange={() => toggleSummaryCatalogItem(activeMilestone.id, item.id)}
                               className="h-4 w-4 rounded border-slate-300 text-brand-teal"
                             />
-                            <span className={titleText}>{item.name || "Unnamed"}</span>
+                            <span className={titleText}>
+                              {item.name || "Unnamed"}
+                              <span className={cn("ml-2 text-xs font-normal", muted)}>
+                                {item.totalBeneficiaries.toLocaleString("en-IN")} allotted ·{" "}
+                                {remainingCatalogBeneficiaries(
+                                  item.id,
+                                  setup.catalog,
+                                  setup.milestones,
+                                  { milestoneId: activeMilestone.id }
+                                ).toLocaleString("en-IN")}{" "}
+                                left
+                              </span>
+                            </span>
                           </label>
                         );
                       })}
@@ -1068,6 +1212,7 @@ export function MilestoneSetupWizard({
                     <input
                       type="number"
                       min={0}
+                      max={milestoneBeneficiaryCap}
                       value={activeMilestone.beneficiarySummary.totalBeneficiaries || ""}
                       onChange={(e) =>
                         updateMilestoneSummary(activeMilestone.id, {
@@ -1076,6 +1221,23 @@ export function MilestoneSetupWizard({
                       }
                       className={fieldClassName()}
                     />
+                    <p className={cn("mt-1 text-xs", muted)}>
+                      Max {milestoneBeneficiaryCap.toLocaleString("en-IN")} for selected activities (distributed
+                      proportionally; cannot exceed each activity&apos;s allotment).
+                    </p>
+                    {milestoneBeneficiarySplit.length > 0 && (
+                      <div className={cn("mt-3 rounded-lg border px-3 py-2 text-xs", border)}>
+                        <p className={cn("mb-1 font-medium", label)}>Distribution preview</p>
+                        <ul className="space-y-1 tabular-nums">
+                          {milestoneBeneficiarySplit.map((row) => (
+                            <li key={row.id} className={muted}>
+                              {row.name}: {row.share.toLocaleString("en-IN")} of {row.allotted.toLocaleString("en-IN")}{" "}
+                              allotted ({row.remaining.toLocaleString("en-IN")} unallocated across milestones)
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
