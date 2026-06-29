@@ -188,6 +188,7 @@ export async function POST(request: Request) {
         fundType: parsed.data.fundType,
         fundId,
         financeProjectId,
+        milestoneBudgetId: parsed.data.milestoneBudgetId,
         attachments: {
           create: parsed.data.attachments.map((a) => ({
             fileName: a.fileName,

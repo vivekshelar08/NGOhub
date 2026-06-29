@@ -451,9 +451,26 @@ export function completeTask(
 
   if (completed.source === "milestone_kpi" && completed.kpiId) {
     applyCompletionToProjectKpi(completed);
+    void syncMilestoneToFinanceApi(completed);
   }
 
   return completed;
+}
+
+function syncMilestoneToFinanceApi(task: ActivityTask) {
+  if (!task.milestoneId || typeof fetch === "undefined") return;
+  const ben = getTaskBeneficiaryCount(task);
+  fetch("/api/ngo-integrations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "sync_milestone_from_activity",
+      legacyProjectId: task.projectId,
+      legacyMilestoneId: task.milestoneId,
+      activities: 1,
+      beneficiaries: ben,
+    }),
+  }).catch(() => {});
 }
 
 /** Apply offline-queued task completion (localStorage sync — no server API). */

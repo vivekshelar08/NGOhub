@@ -9,6 +9,7 @@ import { ProposalExportActions } from "@/components/projects/ProposalExportActio
 import { ProjectEnrollmentSummary } from "@/components/projects/ProjectEnrollmentSummary";
 import { ProjectEnhancementsPanel } from "@/components/projects/ProjectEnhancementsPanel";
 import { ProjectStrategyPanel } from "@/components/projects/ProjectStrategyPanel";
+import { syncApprovedProjectToFinance } from "@/lib/auto-finance-sync-client";
 import { cn } from "@/lib/utils";
 import { formatSdgLabel } from "@/lib/sdg";
 import { loadDonors, resolveDonorLabels } from "@/lib/donors";
@@ -87,6 +88,7 @@ export function ProjectDetailView({
     if (status === "REVISED") {
       router.push(`${basePath}/${project.id}/edit`);
     } else if (status === "APPROVED") {
+      void syncApprovedProjectToFinance(saved).catch(() => {});
       const approved = { ...saved, status: "APPROVED" as const };
       if (needsMilestoneSetup(approved)) {
         router.push(`${basePath}/${project.id}/setup`);

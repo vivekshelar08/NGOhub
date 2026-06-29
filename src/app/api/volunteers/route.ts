@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/role-features";
+import { listVolunteerPipeline, convertVolunteerToStaffInvite, updateVolunteerEnrollment } from "@/lib/volunteer-pipeline";
+import { VolunteerEnrollmentStatus } from "@/generated/prisma/enums";
 import { z } from "zod";
 
 const volunteerSchema = z.object({
@@ -27,36 +29,27 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const volunteers = await prisma.volunteer.findMany({
-    where: { isActive: true },
-    orderBy: { name: "asc" },
-    include: {
-      hours: {
-        orderBy: { activityDate: "desc" },
-        take: 5,
-      },
-      _count: { select: { hours: true } },
-    },
-  });
+  const volunteers = await listVolunteerPipeline(prisma);
 
-  const withTotals = volunteers.map((v) => ({
-    id: v.id,
-    name: v.name,
-    phone: v.phone,
-    email: v.email,
-    skills: v.skills,
-    location: v.location,
-    isActive: v.isActive,
-    totalHours: v.hours.reduce((s, h) => s + Number(h.hours), 0),
-    recentHours: v.hours.map((h) => ({
-      ...h,
-      hours: Number(h.hours),
-      activityDate: h.activityDate.toISOString().slice(0, 10),
+  return NextResponse.json({
+    volunteers: volunteers.map((v) => ({
+      id: v.id,
+      name: v.name,
+      phone: v.phone,
+      email: v.email,
+      skills: v.skills,
+      location: v.location,
+      isActive: v.isActive,
+      enrollmentStatus: v.enrollmentStatus,
+      totalHours: v.totalHours,
+      logCount: v.hoursLogged,
+      recentHours: v.hours.map((h) => ({
+        ...h,
+        hours: Number(h.hours),
+        activityDate: h.activityDate.toISOString().slice(0, 10),
+      })),
     })),
-    logCount: v._count.hours,
-  }));
-
-  return NextResponse.json({ volunteers: withTotals });
+  });
 }
 
 export async function POST(request: Request) {
@@ -86,6 +79,29 @@ export async function POST(request: Request) {
         activityDate: log.activityDate.toISOString().slice(0, 10),
       },
     });
+  }
+
+  if (body.action === "update_enrollment") {
+    const parsed = z
+      .object({
+        volunteerId: z.string(),
+        status: z.enum(["APPLIED", "ACTIVE", "INACTIVE", "CONVERTED_TO_STAFF"]),
+      })
+      .safeParse(body);
+    if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
+    const v = await updateVolunteerEnrollment(prisma, parsed.data.volunteerId, parsed.data.status as VolunteerEnrollmentStatus);
+    return NextResponse.json({ volunteer: v });
+  }
+
+  if (body.action === "convert_to_staff") {
+    const parsed = z.object({ volunteerId: z.string() }).safeParse(body);
+    if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
+    try {
+      const result = await convertVolunteerToStaffInvite(prisma, parsed.data.volunteerId, user.id);
+      return NextResponse.json(result);
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 400 });
+    }
   }
 
   const parsed = volunteerSchema.safeParse(body);

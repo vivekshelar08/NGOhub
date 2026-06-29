@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/role-features";
+import { createGrantAgreementFromPipelineEntry } from "@/lib/grant-agreements";
+import { DonorPipelineStage } from "@/generated/prisma/enums";
 import { z } from "zod";
 
 export async function GET() {
@@ -35,6 +37,22 @@ const createSchema = z.object({
   notes: z.string().optional(),
 });
 
+async function maybeCreateGrantAgreement(
+  entry: {
+    id: string;
+    donorId: string;
+    donorName: string;
+    projectId: string | null;
+    amountPledged: { toString(): string } | null;
+    reportDueDate: Date | null;
+    stage: DonorPipelineStage;
+  },
+  userId: string
+) {
+  if (entry.stage !== DonorPipelineStage.GRANTED) return null;
+  return createGrantAgreementFromPipelineEntry(prisma, entry, userId);
+}
+
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user || !hasFeature(user.role, "donors.manage")) {
@@ -55,10 +73,33 @@ export async function POST(request: Request) {
       amountPledged: parsed.data.amountPledged,
       projectId: parsed.data.projectId,
       notes: parsed.data.notes,
+      proposalSentAt: parsed.data.stage === "PROPOSAL_SENT" ? new Date() : undefined,
+      grantedAt: parsed.data.stage === "GRANTED" ? new Date() : undefined,
     },
   });
 
-  return NextResponse.json({ entry });
+  let grantAgreement: { agreementNumber: string; created: boolean } | null = null;
+  if (parsed.data.stage === "GRANTED") {
+    try {
+      const result = await maybeCreateGrantAgreement(entry, user.id);
+      if (result) {
+        grantAgreement = {
+          agreementNumber: result.agreement.agreementNumber,
+          created: result.created,
+        };
+      }
+    } catch (e) {
+      return NextResponse.json(
+        {
+          entry,
+          grantError: e instanceof Error ? e.message : "Grant agreement failed",
+        },
+        { status: 201 }
+      );
+    }
+  }
+
+  return NextResponse.json({ entry, grantAgreement });
 }
 
 export async function PATCH(request: Request) {
@@ -71,18 +112,40 @@ export async function PATCH(request: Request) {
   const id = body.id as string;
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
+  const previous = await prisma.donorPipelineEntry.findUnique({ where: { id } });
+  if (!previous) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const newStage = body.stage as DonorPipelineStage | undefined;
   const entry = await prisma.donorPipelineEntry.update({
     where: { id },
     data: {
-      stage: body.stage,
+      stage: newStage,
       nextFollowUp: body.nextFollowUp ? new Date(body.nextFollowUp) : undefined,
       reportDueDate: body.reportDueDate ? new Date(body.reportDueDate) : undefined,
       amountPledged: body.amountPledged,
+      projectId: body.projectId,
       notes: body.notes,
-      proposalSentAt: body.stage === "PROPOSAL_SENT" ? new Date() : undefined,
-      grantedAt: body.stage === "GRANTED" ? new Date() : undefined,
+      proposalSentAt: newStage === "PROPOSAL_SENT" ? new Date() : undefined,
+      grantedAt: newStage === "GRANTED" ? new Date() : undefined,
     },
   });
 
-  return NextResponse.json({ entry });
+  let grantAgreement: { agreementNumber: string; created: boolean } | null = null;
+  let grantError: string | undefined;
+
+  if (newStage === "GRANTED" && previous.stage !== DonorPipelineStage.GRANTED) {
+    try {
+      const result = await maybeCreateGrantAgreement(entry, user.id);
+      if (result) {
+        grantAgreement = {
+          agreementNumber: result.agreement.agreementNumber,
+          created: result.created,
+        };
+      }
+    } catch (e) {
+      grantError = e instanceof Error ? e.message : "Grant agreement failed";
+    }
+  }
+
+  return NextResponse.json({ entry, grantAgreement, grantError });
 }

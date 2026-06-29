@@ -8,6 +8,7 @@ import {
   notifyActivityRequestOutcome,
   notifyCalendarApprovers,
 } from "@/lib/calendar-notifications";
+import { canAssignFieldWork, getProjectAvailabilityCalendar } from "@/lib/leave-calendar-sync";
 
 function serializeRequest(
   request: {
@@ -98,6 +99,14 @@ export async function GET(request: Request) {
     if (to) where.scheduledDate.lte = parseDateOnly(to);
   }
 
+  const projectId = searchParams.get("projectId");
+  const availabilityMonth = searchParams.get("availabilityMonth");
+  if (projectId && availabilityMonth) {
+    const [y, m] = availabilityMonth.split("-").map(Number);
+    const cal = await getProjectAvailabilityCalendar(prisma, projectId, m, y);
+    return NextResponse.json(cal);
+  }
+
   const requests = await prisma.activityRequest.findMany({
     where,
     include: requestInclude,
@@ -129,6 +138,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "End date must be on or after start date" }, { status: 400 });
   }
 
+  const leaveCheck = await canAssignFieldWork(prisma, currentUser.id, scheduledDate);
+  if (!leaveCheck.ok) {
+    return NextResponse.json({ error: leaveCheck.reason }, { status: 400 });
+  }
+
   const created = await prisma.activityRequest.create({
     data: {
       requestedById: currentUser.id,
@@ -138,6 +152,7 @@ export async function POST(request: Request) {
       scheduledDate,
       endDate,
       projectId: parsed.data.projectId,
+      legacyMilestoneId: (body as { legacyMilestoneId?: string }).legacyMilestoneId,
     },
     include: requestInclude,
   });

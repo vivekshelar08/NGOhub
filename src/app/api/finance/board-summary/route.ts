@@ -4,11 +4,17 @@ import { getCurrentUser } from "@/lib/auth";
 import { hasPermission } from "@/lib/rbac";
 import { ensureAccountingSetup } from "@/lib/accounting";
 import { getTrialBalance, getProfitAndLoss, getFundWiseStatement } from "@/lib/financial-reports";
+import { buildBoardAuditPack } from "@/lib/board-audit-pack";
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user || !hasPermission(user.role, "view_board_portal")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  if (searchParams.get("pack") === "audit") {
+    return NextResponse.json(await buildBoardAuditPack(prisma, searchParams.get("quarter") ?? undefined));
   }
 
   await ensureAccountingSetup(prisma);

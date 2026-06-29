@@ -24,6 +24,11 @@ const EXPORTS = [
     description: "Annual statement of donations for 80G compliance (due 31 May)",
   },
   {
+    id: "10be",
+    label: "Form 10BE",
+    description: "Donor tax certificates paired with 10BD filing",
+  },
+  {
     id: "fc4",
     label: "FCRA FC-4",
     description: "Foreign contribution schedule for annual FC-4 return (due 31 Dec)",
@@ -32,6 +37,26 @@ const EXPORTS = [
     id: "112",
     label: "Form 112 prep pack",
     description: "NPO audit report data pack (replaces 10B/10BB from FY 2026-27)",
+  },
+  {
+    id: "csr",
+    label: "CSR Annexure II",
+    description: "Project-wise spend and beneficiary reach for CSR Form 1",
+  },
+  {
+    id: "26q",
+    label: "TDS Form 26Q",
+    description: "Quarterly TDS summary from vendor bills",
+  },
+  {
+    id: "gst",
+    label: "GST summary",
+    description: "GSTR-ready invoice summary from vendor bills",
+  },
+  {
+    id: "darpan",
+    label: "NGO Darpan reminders",
+    description: "Registration renewal deadlines from compliance calendar",
   },
 ] as const;
 
@@ -44,7 +69,13 @@ export function ComplianceExportsPanel() {
   async function loadExport(type: string) {
     setLoading(type);
     const params = new URLSearchParams({ type });
-    if (fy) params.set("fy", fy);
+    if (fy && !["gst", "darpan"].includes(type)) params.set("fy", fy);
+    if (type === "26q") params.set("quarter", "1");
+    if (type === "gst") {
+      const now = new Date();
+      params.set("month", String(now.getMonth() + 1));
+      params.set("year", String(now.getFullYear()));
+    }
     const res = await fetch(`/api/finance/compliance-exports?${params}`);
     setLoading(null);
     if (res.ok) {

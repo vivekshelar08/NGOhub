@@ -286,6 +286,65 @@ enum DonorPipelineStage {
   CLOSED
 }
 
+enum GrantAgreementStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  TERMINATED
+}
+
+enum GrantTrancheStatus {
+  PLANNED
+  DUE
+  INVOICED
+  RECEIVED
+}
+
+enum PurchaseRequestStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  PO_ISSUED
+  CANCELLED
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+enum LogframeLevel {
+  GOAL
+  OUTCOME
+  OUTPUT
+  INDICATOR
+}
+
+enum SubGrantStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum PartnerUcStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum VolunteerEnrollmentStatus {
+  APPLIED
+  ACTIVE
+  INACTIVE
+  CONVERTED_TO_STAFF
+}
+
 enum SurveyQuestionType {
   TEXT_SHORT
   TEXT_LONG
@@ -371,6 +430,13 @@ model User {
   attendanceReviews        AttendanceCorrectionRequest[] @relation("AttendanceCorrectionReviews")
   profileChangeRequests    ProfileChangeRequest[]     @relation("ProfileChangeRequests")
   profileChangeReviews     ProfileChangeRequest[]     @relation("ProfileChangeReviews")
+  purchaseRequests         PurchaseRequest[]          @relation("PurchaseRequestsCreated")
+  purchaseOrders           PurchaseOrder[]            @relation("PurchaseOrdersCreated")
+  grantAgreements          GrantAgreement[]           @relation("GrantAgreementsCreated")
+  subGrantsCreated         SubGrantAgreement[]        @relation("SubGrantsCreated")
+  partnerUcsReviewed       PartnerUcSubmission[]      @relation("PartnerUcsReviewed")
+  payrollAllocations       PayrollProjectAllocation[] @relation("EmployeePayrollAllocations")
+  safeguardingAssigned     SafeguardingIncident[]     @relation("SafeguardingAssigned")
 }
 
 model RefreshToken {
@@ -744,25 +810,27 @@ model BeneficiaryFollowUp {
 }
 
 model ActivityRequest {
-  id            String                @id @default(uuid())
-  requestedById String
-  requestedBy   User                  @relation("ActivityRequests", fields: [requestedById], references: [id], onDelete: Cascade)
-  title         String
-  description   String?
-  workType      CalendarWorkType      @default(PROJECT)
-  scheduledDate DateTime              @db.Date
-  endDate       DateTime?             @db.Date
-  projectId     String?
-  status        ActivityRequestStatus @default(PENDING)
-  reviewedById  String?
-  reviewedBy    User?                 @relation("ActivityReviews", fields: [reviewedById], references: [id])
-  reviewedAt    DateTime?
-  reviewNotes   String?
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
+  id                 String                @id @default(uuid())
+  requestedById      String
+  requestedBy          User                  @relation("ActivityRequests", fields: [requestedById], references: [id], onDelete: Cascade)
+  title              String
+  description        String?
+  workType           CalendarWorkType      @default(PROJECT)
+  scheduledDate      DateTime              @db.Date
+  endDate            DateTime?             @db.Date
+  projectId          String?
+  legacyMilestoneId  String?
+  status             ActivityRequestStatus @default(PENDING)
+  reviewedById       String?
+  reviewedBy         User?                 @relation("ActivityReviews", fields: [reviewedById], references: [id])
+  reviewedAt         DateTime?
+  reviewNotes        String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 
   @@index([scheduledDate, status])
   @@index([requestedById])
+  @@index([projectId, legacyMilestoneId])
 }
 
 model PublicHoliday {
@@ -983,18 +1051,21 @@ model Donation {
 }
 
 model Volunteer {
-  id        String          @id @default(uuid())
-  name      String
-  phone     String?
-  email     String?
-  skills    String?
-  location  String?
-  isActive  Boolean         @default(true)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  hours     VolunteerHour[]
+  id               String                    @id @default(uuid())
+  name             String
+  phone            String?
+  email            String?
+  skills           String?
+  location         String?
+  enrollmentStatus VolunteerEnrollmentStatus @default(APPLIED)
+  convertedUserId  String?
+  isActive         Boolean                   @default(true)
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  hours            VolunteerHour[]
 
   @@index([isActive])
+  @@index([enrollmentStatus])
 }
 
 model VolunteerHour {
@@ -1101,36 +1172,46 @@ model PartnerOrganization {
   projectIds         Json?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  subGrants          SubGrantAgreement[]
 }
 
 model AssetItem {
-  id           String   @id @default(uuid())
-  name         String
-  category     String
-  serialNumber String?
-  projectId    String?
-  location     String?
-  value        Decimal? @db.Decimal(12, 2)
-  status       String   @default("ACTIVE")
-  notes        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String         @id @default(uuid())
+  name            String
+  category        String
+  serialNumber    String?
+  projectId       String?
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  location        String?
+  value           Decimal?       @db.Decimal(12, 2)
+  status          String         @default("ACTIVE")
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@index([projectId])
   @@index([status])
+  @@index([purchaseOrderId])
 }
 
 model SafeguardingIncident {
-  id           String   @id @default(uuid())
-  projectId    String?
-  title        String
-  description  String   @db.Text
-  severity     String   @default("MEDIUM")
-  status       String   @default("OPEN")
-  reportedById String
-  reportedBy   User     @relation("SafeguardingReportedBy", fields: [reportedById], references: [id])
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String    @id @default(uuid())
+  projectId       String?
+  title           String
+  description     String    @db.Text
+  severity        String    @default("MEDIUM")
+  status          String    @default("OPEN")
+  reportedById    String
+  reportedBy      User      @relation("SafeguardingReportedBy", fields: [reportedById], references: [id])
+  assignedToId    String?
+  assignedTo      User?     @relation("SafeguardingAssigned", fields: [assignedToId], references: [id])
+  resolutionNotes String?   @db.Text
+  escalatedAt     DateTime?
+  notifyBoard     Boolean   @default(false)
+  closedAt        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([projectId])
   @@index([status])
@@ -1191,6 +1272,14 @@ model FinanceProject {
   journalLines JournalLine[]
   vendorBills  VendorBill[]
   grantInvoices GrantInvoice[]
+  grantAgreements GrantAgreement[]
+  logframeNodes LogframeNode[]
+  purchaseRequests PurchaseRequest[]
+  purchaseOrders PurchaseOrder[]
+  budgetEncumbrances BudgetEncumbrance[]
+  subGrants    SubGrantAgreement[]
+  payrollAllocations PayrollProjectAllocation[]
+  publicPage   PublicProjectPage?
 
   @@index([isActive])
   @@index([legacyProjectId])
@@ -1216,6 +1305,7 @@ model ProjectMilestoneBudget {
   expenses         Expense[]
   utilizationCerts UtilizationCertificate[]
   grantInvoices    GrantInvoice[]
+  purchaseRequests PurchaseRequest[]
 
   @@unique([financeProjectId, legacyMilestoneId])
   @@index([financeProjectId])
@@ -1432,8 +1522,10 @@ model Vendor {
   notes         String?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
-  bills         VendorBill[]
-  payments      VendorPayment[]
+  bills            VendorBill[]
+  payments         VendorPayment[]
+  purchaseRequests PurchaseRequest[]
+  purchaseOrders   PurchaseOrder[]
 
   @@index([isActive])
 }
@@ -1456,6 +1548,8 @@ model VendorBill {
   fund             Fund?            @relation(fields: [fundId], references: [id])
   financeProjectId String?
   financeProject   FinanceProject?  @relation(fields: [financeProjectId], references: [id])
+  purchaseOrderId  String?
+  purchaseOrder    PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
   journalEntryId   String?          @unique
   journalEntry     JournalEntry?    @relation(fields: [journalEntryId], references: [id])
   createdById      String
@@ -1555,4 +1649,216 @@ model FinanceAuditLog {
 
   @@index([entityType, entityId])
   @@index([createdAt])
+}
+
+// ── NGO Suite integrations ───────────────────────────────────────────────────
+
+model GrantAgreement {
+  id               String               @id @default(uuid())
+  financeProjectId String
+  financeProject   FinanceProject       @relation(fields: [financeProjectId], references: [id], onDelete: Cascade)
+  donorId          String?
+  donorName        String
+  agreementNumber  String               @unique
+  totalAmount      Decimal              @db.Decimal(14, 2)
+  startDate        DateTime             @db.Date
+  endDate          DateTime             @db.Date
+  restriction      FundRestriction      @default(RESTRICTED)
+  reportingCadence String?
+  status           GrantAgreementStatus @default(DRAFT)
+  notes            String?
+  pipelineEntryId  String?
+  createdById      String
+  createdBy        User                 @relation("GrantAgreementsCreated", fields: [createdById], references: [id])
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  tranches         GrantTranche[]
+
+  @@index([financeProjectId])
+  @@index([status])
+}
+
+model GrantTranche {
+  id              String            @id @default(uuid())
+  agreementId     String
+  agreement       GrantAgreement    @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  sequence        Int
+  amount          Decimal           @db.Decimal(14, 2)
+  dueDate         DateTime          @db.Date
+  reportDueDate   DateTime?         @db.Date
+  milestoneBudgetId String?
+  status          GrantTrancheStatus @default(PLANNED)
+  grantInvoiceId  String?
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([agreementId, sequence])
+  @@index([agreementId])
+  @@index([status, dueDate])
+}
+
+model LogframeNode {
+  id               String         @id @default(uuid())
+  financeProjectId String
+  financeProject   FinanceProject @relation(fields: [financeProjectId], references: [id], onDelete: Cascade)
+  parentId         String?
+  parent           LogframeNode?  @relation("LogframeTree", fields: [parentId], references: [id])
+  children         LogframeNode[] @relation("LogframeTree")
+  level            LogframeLevel
+  name             String
+  description      String?
+  unit             String?
+  baseline         Decimal        @default(0) @db.Decimal(14, 2)
+  target           Decimal        @default(0) @db.Decimal(14, 2)
+  actual           Decimal        @default(0) @db.Decimal(14, 2)
+  legacyMilestoneId String?
+  legacyKpiName    String?
+  sequence         Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([financeProjectId])
+  @@index([parentId])
+}
+
+model PurchaseRequest {
+  id                 String                @id @default(uuid())
+  requestNumber      String                @unique
+  financeProjectId   String?
+  financeProject     FinanceProject?       @relation(fields: [financeProjectId], references: [id])
+  milestoneBudgetId  String?
+  milestoneBudget    ProjectMilestoneBudget? @relation(fields: [milestoneBudgetId], references: [id])
+  vendorId           String?
+  vendor             Vendor?               @relation(fields: [vendorId], references: [id])
+  budgetHead         String?
+  description        String
+  amount             Decimal               @db.Decimal(14, 2)
+  status             PurchaseRequestStatus @default(DRAFT)
+  requestedById      String
+  requestedBy        User                  @relation("PurchaseRequestsCreated", fields: [requestedById], references: [id])
+  approvedAt         DateTime?
+  reviewNotes        String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  purchaseOrder      PurchaseOrder?
+  encumbrance        BudgetEncumbrance?
+
+  @@index([status])
+  @@index([financeProjectId])
+}
+
+model PurchaseOrder {
+  id               String              @id @default(uuid())
+  poNumber         String              @unique
+  requestId        String              @unique
+  request          PurchaseRequest     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  vendorId         String
+  vendor           Vendor              @relation(fields: [vendorId], references: [id])
+  financeProjectId String?
+  financeProject   FinanceProject?     @relation(fields: [financeProjectId], references: [id])
+  amount           Decimal             @db.Decimal(14, 2)
+  status           PurchaseOrderStatus @default(DRAFT)
+  issuedAt         DateTime?
+  createdById      String
+  createdBy        User                @relation("PurchaseOrdersCreated", fields: [createdById], references: [id])
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  vendorBills      VendorBill[]
+  assets           AssetItem[]
+
+  @@index([status])
+  @@index([vendorId])
+}
+
+model BudgetEncumbrance {
+  id               String          @id @default(uuid())
+  financeProjectId String
+  financeProject   FinanceProject  @relation(fields: [financeProjectId], references: [id], onDelete: Cascade)
+  purchaseRequestId String?        @unique
+  purchaseRequest  PurchaseRequest? @relation(fields: [purchaseRequestId], references: [id])
+  budgetHead       String?
+  amount           Decimal         @db.Decimal(14, 2)
+  released         Boolean         @default(false)
+  releasedAt       DateTime?
+  createdAt        DateTime        @default(now())
+
+  @@index([financeProjectId, released])
+}
+
+model SubGrantAgreement {
+  id               String             @id @default(uuid())
+  partnerId        String
+  partner          PartnerOrganization @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  financeProjectId String
+  financeProject   FinanceProject     @relation(fields: [financeProjectId], references: [id], onDelete: Cascade)
+  agreementNumber  String             @unique
+  amount           Decimal            @db.Decimal(14, 2)
+  adminPercent     Decimal            @default(0) @db.Decimal(5, 2)
+  startDate        DateTime           @db.Date
+  endDate          DateTime           @db.Date
+  status           SubGrantStatus     @default(DRAFT)
+  notes            String?
+  createdById      String
+  createdBy        User               @relation("SubGrantsCreated", fields: [createdById], references: [id])
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  partnerUcs       PartnerUcSubmission[]
+
+  @@index([partnerId])
+  @@index([financeProjectId])
+}
+
+model PartnerUcSubmission {
+  id           String            @id @default(uuid())
+  subGrantId   String
+  subGrant     SubGrantAgreement @relation(fields: [subGrantId], references: [id], onDelete: Cascade)
+  periodStart  DateTime          @db.Date
+  periodEnd    DateTime          @db.Date
+  amount       Decimal           @db.Decimal(14, 2)
+  status       PartnerUcStatus   @default(DRAFT)
+  notes        String?
+  submittedAt  DateTime?
+  reviewedById String?
+  reviewedBy   User?             @relation("PartnerUcsReviewed", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([subGrantId, status])
+}
+
+model PayrollProjectAllocation {
+  id               String         @id @default(uuid())
+  employeeUserId   String
+  employee         User           @relation("EmployeePayrollAllocations", fields: [employeeUserId], references: [id], onDelete: Cascade)
+  financeProjectId String
+  financeProject   FinanceProject @relation(fields: [financeProjectId], references: [id], onDelete: Cascade)
+  month            Int
+  year             Int
+  percent          Decimal        @db.Decimal(5, 2)
+  notes            String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([employeeUserId, financeProjectId, month, year])
+  @@index([month, year])
+}
+
+model PublicProjectPage {
+  id               String         @id @default(uuid())
+  financeProjectId String         @unique
+  financeProject   FinanceProject @relation(fields: [financeProjectId], references: [id], onDelete: Cascade)
+  legacyProjectId  String?
+  isPublished      Boolean        @default(false)
+  summary          String?        @db.Text
+  sdgTags          String[]       @default([])
+  showBudget       Boolean        @default(true)
+  showBeneficiaries Boolean       @default(true)
+  publishedAt      DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([isPublished])
+  @@index([legacyProjectId])
 }

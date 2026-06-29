@@ -63,8 +63,16 @@ export async function PATCH(request: Request) {
 
   const incident = await prisma.safeguardingIncident.update({
     where: { id },
-    data: { status: body.status, severity: body.severity },
-    include: { reportedBy: { select: { id: true, name: true } } },
+    data: {
+      status: body.status,
+      severity: body.severity,
+      assignedToId: body.assignedToId,
+      resolutionNotes: body.resolutionNotes,
+      notifyBoard: body.notifyBoard,
+      escalatedAt: body.status === "ESCALATED" ? new Date() : undefined,
+      closedAt: body.status === "CLOSED" || body.status === "RESOLVED" ? new Date() : undefined,
+    },
+    include: { reportedBy: { select: { id: true, name: true } }, assignedTo: { select: { id: true, name: true } } },
   });
 
   return NextResponse.json({ incident });

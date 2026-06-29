@@ -37,7 +37,9 @@ export function AddExpenseForm({ onSuccess, onError }: AddExpenseFormProps) {
     fundType: "",
     fundId: "",
     financeProjectId: "",
+    milestoneBudgetId: "",
   });
+  const [milestones, setMilestones] = useState<Array<{ id: string; milestoneName: string }>>([]);
   const [projects, setProjects] = useState<ProjectProposal[]>([]);
 
   useEffect(() => {
@@ -48,6 +50,24 @@ export function AddExpenseForm({ onSuccess, onError }: AddExpenseFormProps) {
     () => meta?.financeProjects.find((p) => p.id === form.financeProjectId),
     [meta, form.financeProjectId]
   );
+
+  useEffect(() => {
+    if (!form.financeProjectId) {
+      setMilestones([]);
+      return;
+    }
+    fetch(`/api/finance/workflow?financeProjectId=${form.financeProjectId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        setMilestones(
+          (d.milestones ?? []).map((m: { id: string; milestoneName: string }) => ({
+            id: m.id,
+            milestoneName: m.milestoneName,
+          }))
+        );
+      })
+      .catch(() => setMilestones([]));
+  }, [form.financeProjectId]);
 
   const budgetHeads = useMemo(() => {
     if (selectedFinanceProject?.budgetLines.length) {
@@ -101,6 +121,7 @@ export function AddExpenseForm({ onSuccess, onError }: AddExpenseFormProps) {
       fundType: form.fundType || undefined,
       fundId: form.fundId || undefined,
       financeProjectId: form.financeProjectId || undefined,
+      milestoneBudgetId: form.milestoneBudgetId || undefined,
       attachments,
     };
 
@@ -143,6 +164,7 @@ export function AddExpenseForm({ onSuccess, onError }: AddExpenseFormProps) {
       fundType: "",
       fundId: "",
       financeProjectId: "",
+      milestoneBudgetId: "",
     });
     setPhotos([]);
     setPdfs([]);
@@ -236,7 +258,7 @@ export function AddExpenseForm({ onSuccess, onError }: AddExpenseFormProps) {
               <Select
                 value={form.financeProjectId}
                 onChange={(e) =>
-                  setForm({ ...form, financeProjectId: e.target.value, budgetHead: "" })
+                  setForm({ ...form, financeProjectId: e.target.value, budgetHead: "", milestoneBudgetId: "" })
                 }
               >
                 <option value="">None</option>
@@ -273,6 +295,22 @@ export function AddExpenseForm({ onSuccess, onError }: AddExpenseFormProps) {
                 ))}
               </Select>
             </div>
+            {milestones.length > 0 && (
+              <div>
+                <Label>Milestone</Label>
+                <Select
+                  value={form.milestoneBudgetId}
+                  onChange={(e) => setForm({ ...form, milestoneBudgetId: e.target.value })}
+                >
+                  <option value="">None</option>
+                  {milestones.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.milestoneName}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
             <div>
               <Label>Fund type (legacy)</Label>
               <Select value={form.fundType} onChange={(e) => setForm({ ...form, fundType: e.target.value })}>

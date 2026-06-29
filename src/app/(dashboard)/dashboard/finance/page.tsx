@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/role-features";
+import { hasPermission } from "@/lib/rbac";
 import { FinanceView } from "@/components/finance/FinanceView";
 
 export default async function FinancePage() {
@@ -25,6 +26,7 @@ export default async function FinancePage() {
       canDonations={hasFeature(user.role, "finance.donations")}
       canInterFund={hasFeature(user.role, "finance.inter_fund")}
       canBudgetActual={hasFeature(user.role, "finance.budget_actual")}
+      canModifyFinance={hasPermission(user.role, "modify_finance_records")}
       isAdmin={user.role === "ADMIN" || hasFeature(user.role, "admin.access")}
     />
   );

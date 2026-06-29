@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BarChart3, Shield, Users } from "lucide-react";
+import { BarChart3, Download, Shield, Users } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/Card";
 import { PageHeader, PageShell } from "@/components/ui/PageHeader";
 
@@ -75,11 +76,30 @@ export function BoardPortalView() {
       ]
     : [];
 
+  async function downloadAuditPack() {
+    const res = await fetch("/api/finance/board-summary?pack=audit");
+    if (!res.ok) return;
+    const data = await res.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `board-audit-pack-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <PageShell>
       <PageHeader
         title="Board portal"
         description="Read-only overview for trustees and board members — no operational actions."
+        actions={
+          <Button type="button" variant="outline" className="gap-2" onClick={downloadAuditPack}>
+            <Download className="h-4 w-4" />
+            Quarterly audit pack
+          </Button>
+        }
       />
 
       {!stats ? (

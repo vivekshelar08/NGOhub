@@ -7,6 +7,7 @@ import { Card, CardTitle } from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
 import { PageHeader, PageShell } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/Badge";
+import { SubGrantPanel } from "@/components/partners/SubGrantPanel";
 
 interface Partner {
   id: string;
@@ -125,6 +126,8 @@ export function PartnersView() {
           ))}
         </div>
       )}
+
+      <SubGrantPanel />
     </PageShell>
   );
 }
