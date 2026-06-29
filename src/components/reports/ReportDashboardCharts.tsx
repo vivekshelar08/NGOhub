@@ -2,11 +2,15 @@
 
 import { type ReactNode, useMemo } from "react";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Legend,
+  Line,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -14,6 +18,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { Radio } from "lucide-react";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { ProgressBar } from "@/components/achievements/AchievementCharts";
 import { cn } from "@/lib/utils";
@@ -35,6 +40,14 @@ import { computeCohortReport, exportCohortReportExcel } from "@/lib/cohortReport
 import { Button } from "@/components/ui/Button";
 import { FileSpreadsheet } from "lucide-react";
 import {
+  AnalyticsOverview,
+  buildActivityLiveFeed,
+  buildActivityTrendSeries,
+  buildWeeklyActivitySeries,
+} from "@/lib/analytics";
+import { LiveActivityFeed } from "@/components/reports/LiveActivityFeed";
+import { getTaskBeneficiaryCount } from "@/lib/activities";
+import {
   CHART_COLORS,
   DASHBOARD_VIEWS,
   DashboardViewId,
@@ -48,8 +61,17 @@ interface ReportDashboardChartsProps {
   achievementOverview: AchievementOverview;
   beneficiaries: BeneficiaryExportRow[];
   meetings: MeetingExportRow[];
+  analytics: AnalyticsOverview | null;
+  analyticsLoading?: boolean;
+  lastRefreshed?: string | null;
   canExport?: boolean;
   projectTitles?: Map<string, string>;
+}
+
+function formatCurrency(value: number): string {
+  if (value >= 10_00_000) return `₹${(value / 10_00_000).toFixed(1)}L`;
+  if (value >= 1000) return `₹${(value / 1000).toFixed(1)}K`;
+  return `₹${Math.round(value)}`;
 }
 
 function countByLabel<T extends string>(
@@ -113,6 +135,9 @@ export function ReportDashboardCharts({
   achievementOverview,
   beneficiaries,
   meetings,
+  analytics,
+  analyticsLoading = false,
+  lastRefreshed,
   canExport = false,
   projectTitles = new Map(),
 }: ReportDashboardChartsProps) {
@@ -177,9 +202,29 @@ export function ReportDashboardCharts({
       .map(([name, value]) => ({ name, value }));
   }, [activities]);
 
+  const activityTrendData = useMemo(() => buildActivityTrendSeries(activities), [activities]);
+  const weeklyActivityData = useMemo(() => buildWeeklyActivitySeries(activities), [activities]);
+  const liveFeed = useMemo(
+    () =>
+      buildActivityLiveFeed(
+        activities.map((t) => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          workType: t.workType,
+          scheduledDate: t.scheduledDate,
+          completedAt: t.completedAt,
+          projectTitle: t.projectTitle,
+          beneficiaryCount: getTaskBeneficiaryCount(t),
+        }))
+      ),
+    [activities]
+  );
+
   const completed = activities.filter((a) => a.status === "completed").length;
   const urgentCount = beneficiaries.filter((b) => b.isUrgentCase).length;
   const caseStudyCount = beneficiaries.filter((b) => b.isCaseStudy).length;
+  const beneficiariesReached = activities.reduce((s, t) => s + getTaskBeneficiaryCount(t), 0);
 
   const overviewStats = (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -199,14 +244,31 @@ export function ReportDashboardCharts({
     </div>
   );
 
+  const liveIndicator = (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
+        <Radio className="h-3 w-3 animate-pulse" />
+        Live
+      </span>
+      {lastRefreshed && (
+        <span>Last synced {new Date(lastRefreshed).toLocaleTimeString()}</span>
+      )}
+      {analyticsLoading && <span>Refreshing server data…</span>}
+    </div>
+  );
+
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">Interactive dashboards</h2>
-        <p className="text-sm text-slate-500">
-          Free built-in charts powered by Recharts — updates instantly with your filters.
-        </p>
-        <p className="mt-1 text-xs text-slate-500">{filterSummary}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Interactive dashboards</h2>
+          <p className="text-sm text-slate-500">
+            Multi-activity reporting with live tracking — inspired by nonprofit BI best practices
+            (single source of truth, role-based views, drill-down filters).
+          </p>
+          <p className="mt-1 text-xs text-slate-500">{filterSummary}</p>
+        </div>
+        {liveIndicator}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -230,6 +292,279 @@ export function ReportDashboardCharts({
       <p className="text-sm text-slate-500">
         {DASHBOARD_VIEWS.find((v) => v.id === dashboardView)?.description}
       </p>
+
+      {dashboardView === "command" && (
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+            <StatCard label="Field Activities" value={activities.length} hint={`${completed} completed`} />
+            <StatCard label="Beneficiaries Reached" value={beneficiariesReached} />
+            <StatCard
+              label="Enrolled (DB)"
+              value={analytics?.kpis.beneficiaries ?? beneficiaries.length}
+              hint={analytics ? `${analytics.kpis.urgentCases} urgent` : undefined}
+            />
+            <StatCard label="Meetings" value={analytics?.kpis.meetings ?? meetings.length} />
+            {analytics?.permissions.finance && analytics.kpis.donationsTotal != null && (
+              <StatCard
+                label="Donations"
+                value={formatCurrency(analytics.kpis.donationsTotal)}
+                hint={`${analytics.kpis.donationCount} gifts`}
+              />
+            )}
+            {analytics?.permissions.volunteers && analytics.kpis.volunteerHours != null && (
+              <StatCard
+                label="Volunteer Hours"
+                value={Math.round(analytics.kpis.volunteerHours)}
+                hint="Logged hours"
+              />
+            )}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <ChartCard title="Activity status mix" className="lg:col-span-1">
+              {statusData.length === 0 ? (
+                <EmptyChart message="No activities for current filters" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={45} outerRadius={75}>
+                      {statusData.map((_, i) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+
+            <ChartCard title="Monthly activity trend (stacked by status)" className="lg:col-span-2">
+              {activityTrendData.every((d) => d.total === 0) ? (
+                <EmptyChart message="No dated activities in filter range" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={activityTrendData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="completed" stackId="a" fill="#10b981" />
+                    <Bar dataKey="active" stackId="a" fill="#3b82f6" />
+                    <Bar dataKey="assigned" stackId="a" fill="#f59e0b" />
+                    <Bar dataKey="rescheduled" stackId="a" fill="#64748b" />
+                    <Bar dataKey="canceled" stackId="a" fill="#ef4444" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ChartCard title="Beneficiary enrollment trend">
+              {(analytics?.beneficiariesByMonth ?? []).every((d) => (d.count as number) === 0) ? (
+                <EmptyChart message="No enrollment data for filters" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={analytics?.beneficiariesByMonth ?? []}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Area type="monotone" dataKey="count" stroke="#6366f1" fill="#6366f1" fillOpacity={0.2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+
+            <ChartCard title="Work type distribution">
+              {workTypeData.length === 0 ? (
+                <EmptyChart message="No work type data" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={workTypeData} layout="vertical" margin={{ left: 16 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} />
+                    <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card className="p-4">
+              <CardTitle className="text-sm">Live field activity feed</CardTitle>
+              <div className="mt-3 max-h-80 overflow-y-auto">
+                <LiveActivityFeed events={liveFeed} />
+              </div>
+            </Card>
+
+            <Card className="p-4">
+              <CardTitle className="text-sm">KPI achievement snapshot</CardTitle>
+              <div className="mt-4 space-y-4">
+                <ProgressBar
+                  label="Activities"
+                  achieved={achievementOverview.achievedActivities}
+                  target={achievementOverview.targetActivities}
+                  pct={achievementOverview.activityPct}
+                />
+                <ProgressBar
+                  label="Beneficiaries"
+                  achieved={achievementOverview.achievedBeneficiaries}
+                  target={achievementOverview.targetBeneficiaries}
+                  pct={achievementOverview.beneficiaryPct}
+                  color="#3b82f6"
+                />
+                {achievementOverview.overallPct != null && (
+                  <p className="text-sm text-slate-600">
+                    Overall program progress:{" "}
+                    <span className="font-semibold text-slate-900">
+                      {achievementOverview.overallPct}%
+                    </span>
+                  </p>
+                )}
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {dashboardView === "finance" && (
+        <div className="space-y-4">
+          {!analytics?.permissions.finance ? (
+            <Card className="p-6 text-center text-sm text-slate-500">
+              Finance analytics require finance view permission. Contact your admin for access.
+            </Card>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatCard
+                  label="Total donations"
+                  value={formatCurrency(analytics.kpis.donationsTotal ?? 0)}
+                  hint={`${analytics.kpis.donationCount ?? 0} gifts`}
+                />
+                <StatCard
+                  label="Approved expenses"
+                  value={formatCurrency(analytics.kpis.expensesTotal ?? 0)}
+                />
+                <StatCard
+                  label="Net (donations − expenses)"
+                  value={formatCurrency(
+                    (analytics.kpis.donationsTotal ?? 0) - (analytics.kpis.expensesTotal ?? 0)
+                  )}
+                />
+                <StatCard label="Beneficiaries served" value={analytics.kpis.beneficiaries} />
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <ChartCard title="Donations by month">
+                  {analytics.donationsByMonth.every((d) => (d.amount as number) === 0) ? (
+                    <EmptyChart message="No donations in filter range" />
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={analytics.donationsByMonth}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                        <YAxis tickFormatter={(v) => formatCurrency(v)} />
+                        <Tooltip formatter={(v) => formatCurrency(Number(v ?? 0))} />
+                        <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} />
+                        <Line type="monotone" dataKey="amount" stroke="#059669" strokeWidth={2} dot={false} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartCard>
+
+                <ChartCard title="Expenses by category">
+                  {analytics.expensesByCategory.length === 0 ? (
+                    <EmptyChart message="No approved expenses in filter range" />
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={analytics.expensesByCategory} layout="vertical" margin={{ left: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" tickFormatter={(v) => formatCurrency(v)} />
+                        <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} />
+                        <Tooltip formatter={(v) => formatCurrency(Number(v ?? 0))} />
+                        <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartCard>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {dashboardView === "trends" && (
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatCard label="Activities in range" value={activities.length} />
+            <StatCard label="Completion rate" value={activities.length ? `${Math.round((completed / activities.length) * 100)}%` : "—"} />
+            <StatCard label="Beneficiaries reached" value={beneficiariesReached} />
+          </div>
+
+          <ChartCard title="Weekly activity pulse (completed vs scheduled)">
+            {weeklyActivityData.every((d) => d.completed === 0 && d.scheduled === 0) ? (
+              <EmptyChart message="No weekly activity data" />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={weeklyActivityData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="week" tick={{ fontSize: 10 }} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Area type="monotone" dataKey="completed" stackId="1" stroke="#10b981" fill="#10b981" fillOpacity={0.4} />
+                  <Area type="monotone" dataKey="scheduled" stackId="1" stroke="#6366f1" fill="#6366f1" fillOpacity={0.3} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ChartCard title="Monthly status breakdown">
+              {activityTrendData.every((d) => d.total === 0) ? (
+                <EmptyChart message="No dated activities" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={activityTrendData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="completed" fill="#10b981" />
+                    <Bar dataKey="active" fill="#3b82f6" />
+                    <Bar dataKey="assigned" fill="#f59e0b" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+
+            {analytics?.permissions.volunteers && (
+              <ChartCard title="Volunteer hours by month">
+                {analytics.volunteerHoursByMonth.every((d) => (d.hours as number) === 0) ? (
+                  <EmptyChart message="No volunteer hours logged" />
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={analytics.volunteerHoursByMonth}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip />
+                      <Bar dataKey="hours" fill="#14b8a6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </ChartCard>
+            )}
+          </div>
+        </div>
+      )}
 
       {dashboardView === "impact" && (
         <div className="space-y-4">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   BarChart3,
   Database,
@@ -9,13 +10,14 @@ import {
   FileText,
   LayoutDashboard,
   Loader2,
+  RefreshCw,
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
 import { cn } from "@/lib/utils";
-import { ReportType } from "@/lib/aiReport";
+import { ImpactReportResult, ReportType } from "@/lib/aiReport";
 import { loadProjects, ProjectProposal } from "@/lib/projects";
 import {
   ActivityTask,
@@ -36,14 +38,20 @@ import { BENEFICIARY_CATEGORY_LABELS } from "@/lib/service-portal-utils";
 import { MeetingExportRow } from "@/lib/meetingExport";
 import { BeneficiaryExportRow } from "@/lib/beneficiaryExport";
 import {
+  buildImpactChartImages,
   exportAllFilteredData,
+  exportImpactReportMarkdown,
+  exportImpactReportPdf,
+  exportImpactReportWord,
   exportReportByFormat,
   ReportExportFormat,
   ReportExportContext,
 } from "@/lib/reportExport";
 import { ReportDashboardCharts } from "@/components/reports/ReportDashboardCharts";
-import { DashboardViewId } from "@/lib/report-dashboards";
+import { ImpactReportPreview } from "@/components/reports/ImpactReportPreview";
+import { DashboardViewId, LIVE_REFRESH_MS } from "@/lib/report-dashboards";
 import { computeCohortReport, exportCohortReportExcel } from "@/lib/cohortReport";
+import { AnalyticsOverview } from "@/lib/analytics";
 
 interface ReportsViewProps {
   canExport: boolean;
@@ -93,20 +101,37 @@ const EXPORT_FORMATS: { id: ReportExportFormat; label: string; icon: typeof File
 ];
 
 export function ReportsView({ canExport }: ReportsViewProps) {
-  const [activeTab, setActiveTab] = useState<ReportsTab>("dashboard");
-  const [reportType, setReportType] = useState<ReportType>("combined");
-  const [dashboardView, setDashboardView] = useState<DashboardViewId>("impact");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const [activeTab, setActiveTab] = useState<ReportsTab>(
+    (searchParams.get("tab") as ReportsTab) || "dashboard"
+  );
+  const [reportType, setReportType] = useState<ReportType>(
+    (searchParams.get("scope") as ReportType) || "combined"
+  );
+  const [dashboardView, setDashboardView] = useState<DashboardViewId>(
+    (searchParams.get("view") as DashboardViewId) || "command"
+  );
   const [projects, setProjects] = useState<ProjectProposal[]>([]);
-  const [projectId, setProjectId] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [status, setStatus] = useState("");
-  const [category, setCategory] = useState("");
-  const [workType, setWorkType] = useState("");
-  const [urgentOnly, setUrgentOnly] = useState(false);
-  const [caseStudyOnly, setCaseStudyOnly] = useState(false);
-  const [query, setQuery] = useState("");
-  const [sdgGoal, setSdgGoal] = useState<number | "">("");
+  const [activityTick, setActivityTick] = useState(0);
+  const [projectId, setProjectId] = useState(searchParams.get("projectId") ?? "");
+  const [from, setFrom] = useState(searchParams.get("from") ?? "");
+  const [to, setTo] = useState(searchParams.get("to") ?? "");
+  const [status, setStatus] = useState(searchParams.get("status") ?? "");
+  const [category, setCategory] = useState(searchParams.get("category") ?? "");
+  const [workType, setWorkType] = useState(searchParams.get("workType") ?? "");
+  const [urgentOnly, setUrgentOnly] = useState(searchParams.get("urgentOnly") === "1");
+  const [caseStudyOnly, setCaseStudyOnly] = useState(searchParams.get("caseStudyOnly") === "1");
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
+  const [sdgGoal, setSdgGoal] = useState<number | "">(() => {
+    const raw = searchParams.get("sdg");
+    return raw ? parseInt(raw, 10) : "";
+  });
+
+  const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
 
   const [beneficiaryCount, setBeneficiaryCount] = useState(0);
   const [meetingCount, setMeetingCount] = useState(0);
@@ -115,16 +140,84 @@ export function ReportsView({ canExport }: ReportsViewProps) {
 
   const [aiNarrative, setAiNarrative] = useState("");
   const [aiProvider, setAiProvider] = useState<"groq" | "gemini" | "template" | null>(null);
+  const [impactReport, setImpactReport] = useState<ImpactReportResult | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [impactExporting, setImpactExporting] = useState<"pdf" | "word" | "md" | null>(null);
   const [exporting, setExporting] = useState<ReportExportFormat | "all" | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     setProjects(loadProjects());
-    const refresh = () => setProjects(loadProjects());
-    window.addEventListener("projects-updated", refresh);
-    return () => window.removeEventListener("projects-updated", refresh);
+    const refreshProjects = () => setProjects(loadProjects());
+    const refreshActivities = () => setActivityTick((n) => n + 1);
+    window.addEventListener("projects-updated", refreshProjects);
+    window.addEventListener("activities-updated", refreshActivities);
+    return () => {
+      window.removeEventListener("projects-updated", refreshProjects);
+      window.removeEventListener("activities-updated", refreshActivities);
+    };
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (activeTab !== "dashboard") params.set("tab", activeTab);
+    if (reportType !== "combined") params.set("scope", reportType);
+    if (dashboardView !== "command") params.set("view", dashboardView);
+    if (projectId) params.set("projectId", projectId);
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    if (status) params.set("status", status);
+    if (category) params.set("category", category);
+    if (workType) params.set("workType", workType);
+    if (urgentOnly) params.set("urgentOnly", "1");
+    if (caseStudyOnly) params.set("caseStudyOnly", "1");
+    if (query.trim()) params.set("q", query.trim());
+    if (sdgGoal !== "") params.set("sdg", String(sdgGoal));
+
+    const qs = params.toString();
+    router.replace(qs ? `/dashboard/reports?${qs}` : "/dashboard/reports", { scroll: false });
+  }, [
+    activeTab,
+    reportType,
+    dashboardView,
+    projectId,
+    from,
+    to,
+    status,
+    category,
+    workType,
+    urgentOnly,
+    caseStudyOnly,
+    query,
+    sdgGoal,
+    router,
+  ]);
+
+  const fetchAnalytics = useCallback(async () => {
+    setAnalyticsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (projectId) params.set("projectId", projectId);
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+      const res = await fetch(`/api/analytics/overview?${params}`);
+      if (res.ok) {
+        const data = (await res.json()) as AnalyticsOverview;
+        setAnalytics(data);
+        setLastRefreshed(data.generatedAt);
+      }
+    } catch {
+      /* analytics optional */
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [projectId, from, to]);
+
+  useEffect(() => {
+    fetchAnalytics();
+    const interval = setInterval(fetchAnalytics, LIVE_REFRESH_MS);
+    return () => clearInterval(interval);
+  }, [fetchAnalytics]);
 
   const activities = useMemo(() => {
     let list = loadActivityTasks();
@@ -141,7 +234,7 @@ export function ReportsView({ canExport }: ReportsViewProps) {
       );
     }
     return list;
-  }, [projectId, from, to, status, workType, query]);
+  }, [projectId, from, to, status, workType, query, activityTick]);
 
   const achievementOverview = useMemo(() => {
     const all = computeAllProjectAchievements(projects);
@@ -342,6 +435,78 @@ export function ReportsView({ canExport }: ReportsViewProps) {
     [activities]
   );
 
+  async function handleGenerateImpactReport() {
+    setGenerating(true);
+    setError("");
+    setImpactReport(null);
+    setAiNarrative("");
+    setAiProvider(null);
+
+    try {
+      const res = await fetch("/api/reports/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reportType: "impact",
+          projectId: projectId || undefined,
+          projectTitle: projectId
+            ? projects.find((p) => p.id === projectId)?.title
+            : undefined,
+          filterSummary,
+          from: from || undefined,
+          to: to || undefined,
+          status: status || undefined,
+          category: category || undefined,
+          urgentOnly,
+          caseStudyOnly,
+          workType: workType || undefined,
+          query: query || undefined,
+          sdgGoal: sdgGoal === "" ? undefined : sdgGoal,
+          activities: buildActivityPayload(),
+          achievementSummary: {
+            targetActivities: achievementOverview.targetActivities,
+            achievedActivities: achievementOverview.achievedActivities,
+            targetBeneficiaries: achievementOverview.targetBeneficiaries,
+            achievedBeneficiaries: achievementOverview.achievedBeneficiaries,
+            projectCount: achievementOverview.activeProjects,
+          },
+          achievementDetail: {
+            activityPct: achievementOverview.activityPct,
+            beneficiaryPct: achievementOverview.beneficiaryPct,
+            overallPct: achievementOverview.overallPct,
+            byStatus: achievementOverview.byStatus,
+          },
+        }),
+      });
+      const data = (await res.json()) as ImpactReportResult & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Impact report generation failed");
+      setImpactReport(data);
+      setAiNarrative(data.narrative);
+      setAiProvider(data.provider);
+      setActiveTab("ai");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Impact report generation failed");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function handleImpactExport(format: "pdf" | "word" | "md") {
+    if (!impactReport) return;
+    setImpactExporting(format);
+    setError("");
+    try {
+      const chartImages = buildImpactChartImages(impactReport);
+      if (format === "pdf") exportImpactReportPdf(impactReport, chartImages);
+      else if (format === "word") await exportImpactReportWord(impactReport, chartImages);
+      else exportImpactReportMarkdown(impactReport, chartImages);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setImpactExporting(null);
+    }
+  }
+
   async function handleGenerateAiReport() {
     setGenerating(true);
     setError("");
@@ -406,7 +571,8 @@ export function ReportsView({ canExport }: ReportsViewProps) {
           <h1 className="text-2xl font-bold text-slate-900">Reports</h1>
         </div>
         <p className="mt-1 text-sm text-slate-500">
-          Interactive dashboards, filtered data exports in multiple formats, and AI narrative reports.
+          Advanced reporting dashboards with live activity tracking, multi-module charts, shareable
+          filter links, and AI narrative exports.
         </p>
       </div>
 
@@ -456,7 +622,20 @@ export function ReportsView({ canExport }: ReportsViewProps) {
       </div>
 
       <Card className="p-5">
-        <CardTitle className="text-base">Filters</CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle className="text-base">Filters</CardTitle>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="gap-1.5"
+            disabled={analyticsLoading}
+            onClick={() => fetchAnalytics()}
+          >
+            <RefreshCw className={cn("h-4 w-4", analyticsLoading && "animate-spin")} />
+            Refresh data
+          </Button>
+        </div>
         <p className="mt-1 text-xs text-slate-500">{filterSummary}</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
@@ -593,6 +772,9 @@ export function ReportsView({ canExport }: ReportsViewProps) {
           achievementOverview={achievementOverview}
           beneficiaries={dashboardBeneficiaries}
           meetings={dashboardMeetings}
+          analytics={analytics}
+          analyticsLoading={analyticsLoading}
+          lastRefreshed={lastRefreshed}
           canExport={canExport}
           projectTitles={projectTitles}
         />
@@ -680,26 +862,112 @@ export function ReportsView({ canExport }: ReportsViewProps) {
       {activeTab === "ai" && (
         <div className="space-y-4">
           <Card className="p-5">
-            <CardTitle className="text-base">AI narrative report</CardTitle>
+            <CardTitle className="text-base">AI Impact Report</CardTitle>
             <p className="mt-1 text-sm text-slate-500">
-              Generate a donor-ready narrative from your filtered data using AI or a built-in
-              template.
+              Generate a structured, donor- and board-ready impact report from your current filters.
+              Includes executive summary, program activities, beneficiary impact, KPI progress,
+              financial highlights (when permitted), and recommendations — with chart exports.
             </p>
-            <Button
-              className="mt-4 gap-1.5"
-              disabled={generating}
-              onClick={handleGenerateAiReport}
-            >
-              {generating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-              {generating ? "Generating…" : "Generate AI Report"}
-            </Button>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                className="gap-1.5"
+                disabled={generating}
+                onClick={handleGenerateImpactReport}
+              >
+                {generating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {generating ? "Generating…" : "Generate Impact Report"}
+              </Button>
+              <Button
+                variant="secondary"
+                className="gap-1.5"
+                disabled={generating}
+                onClick={handleGenerateAiReport}
+              >
+                {generating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4" />
+                )}
+                Quick scope report
+              </Button>
+            </div>
+            <p className="mt-3 text-xs text-slate-500">
+              Uses filtered data: {activities.length} activities · {beneficiaryCount} beneficiaries ·{" "}
+              {meetingCount} meetings
+              {analytics?.permissions.finance ? " · finance included" : ""}
+            </p>
           </Card>
 
-          {aiNarrative && (
+          {impactReport && (
+            <Card className="p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Impact Report Preview</CardTitle>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Provider:{" "}
+                    {impactReport.provider === "groq"
+                      ? "Groq (Llama)"
+                      : impactReport.provider === "gemini"
+                        ? "Google Gemini"
+                        : "Built-in template (add GROQ_API_KEY or GEMINI_API_KEY for AI)"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={Boolean(impactExporting)}
+                    onClick={() => handleImpactExport("pdf")}
+                  >
+                    {impactExporting === "pdf" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    PDF + charts
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={Boolean(impactExporting)}
+                    onClick={() => handleImpactExport("word")}
+                  >
+                    {impactExporting === "word" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileText className="h-4 w-4" />
+                    )}
+                    Word + charts
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={Boolean(impactExporting)}
+                    onClick={() => handleImpactExport("md")}
+                  >
+                    {impactExporting === "md" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileText className="h-4 w-4" />
+                    )}
+                    Markdown + charts
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-4 max-h-[560px] overflow-auto">
+                <ImpactReportPreview narrative={impactReport.narrative} />
+              </div>
+            </Card>
+          )}
+
+          {aiNarrative && !impactReport && (
             <Card className="p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>

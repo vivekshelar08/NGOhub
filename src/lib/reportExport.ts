@@ -31,6 +31,14 @@ import { computeCohortReport } from "@/lib/cohortReport";
 import { BENEFICIARY_COHORT_LABELS } from "@/lib/service-portal-utils";
 import { BeneficiaryCohort } from "@/generated/prisma/enums";
 
+export {
+  buildImpactChartImages,
+  exportImpactReportMarkdown,
+  exportImpactReportPdf,
+  exportImpactReportWord,
+} from "@/lib/impactReportExport";
+export type { ImpactChartImages } from "@/lib/impactReportExport";
+
 export type ReportExportFormat = "excel" | "csv" | "pdf" | "word";
 
 export interface ReportExportContext {

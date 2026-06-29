@@ -1,4 +1,12 @@
-export type DashboardViewId = "impact" | "beneficiaries" | "cohorts" | "operations" | "donor";
+export type DashboardViewId =
+  | "command"
+  | "impact"
+  | "beneficiaries"
+  | "cohorts"
+  | "operations"
+  | "finance"
+  | "trends"
+  | "donor";
 
 export interface DashboardViewDefinition {
   id: DashboardViewId;
@@ -7,6 +15,12 @@ export interface DashboardViewDefinition {
 }
 
 export const DASHBOARD_VIEWS: DashboardViewDefinition[] = [
+  {
+    id: "command",
+    label: "Live Command Center",
+    description:
+      "Real-time multi-activity tracking — field work, beneficiaries, finance, and volunteer trends in one view",
+  },
   {
     id: "impact",
     label: "Impact Overview",
@@ -28,11 +42,24 @@ export const DASHBOARD_VIEWS: DashboardViewDefinition[] = [
     description: "Activity status, work types, and calendar pipeline",
   },
   {
+    id: "finance",
+    label: "Finance & Fundraising",
+    description: "Donations, expenses, and fund utilization for board and donor transparency",
+  },
+  {
+    id: "trends",
+    label: "Activity Trends",
+    description: "Weekly and monthly field activity patterns with status breakdown over time",
+  },
+  {
     id: "donor",
     label: "Donor Pack",
     description: "Achievement progress and outcome metrics for grant reporting",
   },
 ];
+
+/** Auto-refresh interval for live dashboards (ms). */
+export const LIVE_REFRESH_MS = 60_000;
 
 export const CHART_COLORS = [
   "#10b981",
