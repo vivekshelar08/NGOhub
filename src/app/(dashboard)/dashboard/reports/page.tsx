@@ -16,7 +16,7 @@ export default async function ReportsPage() {
   return (
     <div className="p-6 md:p-8">
       <Suspense fallback={<div className="text-sm text-slate-500">Loading reports…</div>}>
-        <ReportsView canExport={canExport} />
+        <ReportsView canExport={canExport} userId={user.id} />
       </Suspense>
     </div>
   );

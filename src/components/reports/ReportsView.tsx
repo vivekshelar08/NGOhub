@@ -53,9 +53,19 @@ import { DashboardViewId, LIVE_REFRESH_MS } from "@/lib/report-dashboards";
 import { computeCohortReport, exportCohortReportExcel } from "@/lib/cohortReport";
 import { AnalyticsOverview } from "@/lib/analytics";
 import { fetchJson } from "@/lib/fetch-json";
+import {
+  AI_GENERATION_DAILY_LIMIT,
+  aiQuotaMessage,
+  canGenerateWithAi,
+  getCachedAiReport,
+  impactReportFingerprint,
+  recordAiGeneration,
+  setCachedAiReport,
+} from "@/lib/ai-report-quota";
 
 interface ReportsViewProps {
   canExport: boolean;
+  userId: string;
 }
 
 type ReportsTab = "dashboard" | "export" | "ai";
@@ -101,7 +111,7 @@ const EXPORT_FORMATS: { id: ReportExportFormat; label: string; icon: typeof File
   { id: "word", label: "Word (.docx)", icon: FileText },
 ];
 
-export function ReportsView({ canExport }: ReportsViewProps) {
+export function ReportsView({ canExport, userId }: ReportsViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -143,6 +153,7 @@ export function ReportsView({ canExport }: ReportsViewProps) {
   const [aiProvider, setAiProvider] = useState<"groq" | "gemini" | "openai" | "template" | null>(null);
   const [impactReport, setImpactReport] = useState<ImpactReportResult | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [aiQuotaNotice, setAiQuotaNotice] = useState("");
   const [impactExporting, setImpactExporting] = useState<"pdf" | "word" | "md" | null>(null);
   const [exporting, setExporting] = useState<ReportExportFormat | "all" | null>(null);
   const [error, setError] = useState("");
@@ -436,6 +447,37 @@ export function ReportsView({ canExport }: ReportsViewProps) {
   async function handleGenerateImpactReport() {
     setGenerating(true);
     setError("");
+    setAiQuotaNotice("");
+
+    const fingerprint = impactReportFingerprint({
+      projectId,
+      from,
+      to,
+      status,
+      category,
+      workType,
+      urgentOnly,
+      query,
+      sdgGoal: sdgGoal === "" ? "" : sdgGoal,
+    });
+
+    const cached = getCachedAiReport<ImpactReportResult>("impact-report", fingerprint);
+    if (cached) {
+      setImpactReport(cached);
+      setAiNarrative(cached.narrative);
+      setAiProvider(cached.provider);
+      setAiQuotaNotice("Showing saved AI report for these filters (no new generation).");
+      setActiveTab("ai");
+      setGenerating(false);
+      return;
+    }
+
+    if (!canGenerateWithAi("impact-report", userId)) {
+      setError(aiQuotaMessage("impact-report", userId));
+      setGenerating(false);
+      return;
+    }
+
     setImpactReport(null);
     setAiNarrative("");
     setAiProvider(null);
@@ -496,6 +538,11 @@ export function ReportsView({ canExport }: ReportsViewProps) {
       setImpactReport(data);
       setAiNarrative(data.narrative);
       setAiProvider(data.provider);
+      if (data.provider !== "template") {
+        recordAiGeneration("impact-report", userId);
+        setCachedAiReport("impact-report", fingerprint, data);
+      }
+      setAiQuotaNotice(aiQuotaMessage("impact-report", userId));
       setActiveTab("ai");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impact report generation failed");
@@ -523,6 +570,40 @@ export function ReportsView({ canExport }: ReportsViewProps) {
   async function handleGenerateAiReport() {
     setGenerating(true);
     setError("");
+    setAiQuotaNotice("");
+
+    const fingerprint = impactReportFingerprint({
+      scope: reportType,
+      projectId,
+      from,
+      to,
+      status,
+      category,
+      workType,
+      urgentOnly,
+      query,
+      sdgGoal: sdgGoal === "" ? "" : sdgGoal,
+    });
+
+    const cached = getCachedAiReport<{ narrative: string; provider: ImpactReportResult["provider"] }>(
+      "scope-report",
+      fingerprint
+    );
+    if (cached) {
+      setAiNarrative(cached.narrative);
+      setAiProvider(cached.provider);
+      setAiQuotaNotice("Showing saved AI report for these filters (no new generation).");
+      setActiveTab("ai");
+      setGenerating(false);
+      return;
+    }
+
+    if (!canGenerateWithAi("scope-report", userId)) {
+      setError(aiQuotaMessage("scope-report", userId));
+      setGenerating(false);
+      return;
+    }
+
     setAiNarrative("");
     setAiProvider(null);
 
@@ -557,6 +638,11 @@ export function ReportsView({ canExport }: ReportsViewProps) {
       );
       setAiNarrative(data.narrative);
       setAiProvider(data.provider);
+      if (data.provider !== "template") {
+        recordAiGeneration("scope-report", userId);
+        setCachedAiReport("scope-report", fingerprint, data);
+      }
+      setAiQuotaNotice(aiQuotaMessage("scope-report", userId));
       setActiveTab("ai");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Report generation failed");
@@ -875,12 +961,15 @@ export function ReportsView({ canExport }: ReportsViewProps) {
 
       {activeTab === "ai" && (
         <div className="space-y-4">
+          {aiQuotaNotice && (
+            <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-900">{aiQuotaNotice}</p>
+          )}
           <Card className="p-5">
             <CardTitle className="text-base">AI Impact Report</CardTitle>
             <p className="mt-1 text-sm text-slate-500">
-              Advanced AI impact engine analyzes your filtered data using the logframe model —
-              inputs, outputs, outcomes, insights, SDG contribution, and long-term impact.
-              Export donor-ready PDF, Word, or Markdown with embedded charts.
+              Advanced AI impact engine — inputs, outputs, outcomes, insights, and SDG sections.
+              Up to {AI_GENERATION_DAILY_LIMIT} new AI generations per day; same filters reuse the
+              saved report without calling AI again.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button

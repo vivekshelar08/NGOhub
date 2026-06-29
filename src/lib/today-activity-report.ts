@@ -5,6 +5,8 @@ import {
   WORK_TYPE_LABELS,
 } from "@/lib/activities";
 import {
+  buildSingleTaskShareMessage,
+  buildTodaysActivityShareMessage,
   getGenderCounts,
   getServiceWiseCounts,
   getUniqueLocations,
@@ -56,6 +58,42 @@ export interface TodayActivityReportResult {
   aiModel?: string;
   generatedAt: string;
   mode: TodayActivityReportMode;
+  /** True when the classic WhatsApp template was used instead of AI. */
+  usedClassicFallback?: boolean;
+}
+
+/** Original share messages — always works offline, no API or AI required. */
+export function buildClassicTodayReportFromTasks(
+  tasks: ActivityTask[],
+  userName: string,
+  mode: TodayActivityReportMode,
+  orgName = DEFAULT_ORG_SETTINGS.orgName
+): TodayActivityReportResult {
+  const message =
+    mode === "single" && tasks.length === 1
+      ? buildSingleTaskShareMessage(tasks[0], userName, orgName)
+      : buildTodaysActivityShareMessage(tasks, userName, orgName);
+
+  return {
+    message,
+    provider: "template",
+    generatedAt: new Date().toISOString(),
+    mode,
+    usedClassicFallback: true,
+  };
+}
+
+export function buildClassicTodayReportFromRequest(
+  request: TodayActivityReportRequest
+): TodayActivityReportResult {
+  const orgName = request.orgName ?? DEFAULT_ORG_SETTINGS.orgName;
+  return {
+    message: buildTemplateFromSummaries(request),
+    provider: "template",
+    generatedAt: new Date().toISOString(),
+    mode: request.mode,
+    usedClassicFallback: true,
+  };
 }
 
 export function serializeTaskForReport(task: ActivityTask): TodayActivityTaskSummary {
@@ -207,16 +245,12 @@ export async function generateTodayActivityReport(
         aiModel: result.model,
         generatedAt,
         mode: request.mode,
+        usedClassicFallback: false,
       };
     }
   }
 
-  return {
-    message: buildTemplateFromSummaries(request),
-    provider: "template",
-    generatedAt,
-    mode: request.mode,
-  };
+  return buildClassicTodayReportFromRequest(request);
 }
 
 function isDailyMode(request: TodayActivityReportRequest): boolean {
@@ -235,6 +269,6 @@ export function getTodayReportProviderLabel(
     case "gemini":
       return `AI · Gemini${aiModel ? ` (${aiModel})` : ""}`;
     default:
-      return "Template report (add an AI API key for personalized writing)";
+      return "Classic share report (works without AI)";
   }
 }
