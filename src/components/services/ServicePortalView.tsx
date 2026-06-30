@@ -63,7 +63,7 @@ import { CommunityContributionDaySummary } from "@/components/community-contribu
 import { CommunityContributionFields } from "@/components/community-contribution/CommunityContributionFields";
 import { CommunityContributionRulesConfig } from "@/components/community-contribution/CommunityContributionRulesConfig";
 import { DeliveryContributionPanel } from "@/components/community-contribution/DeliveryContributionPanel";
-import { ContributionCollectionStatus } from "@/lib/community-contribution";
+import { ContributionCollectionStatus } from "@/lib/community-contribution-shared";
 
 interface ServicePortalViewProps {
   userId: string;

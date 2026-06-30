@@ -1,46 +1,31 @@
 import { Prisma } from "@/generated/prisma/client";
-import {
-  CommunityContributionCollectionStatus,
-  CommunityContributionRecipientType,
-} from "@/generated/prisma/enums";
+import { CommunityContributionRecipientType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
-import { decimalToNumber } from "@/lib/beneficiary-utils";
 import type { SetupCatalogItem } from "@/lib/projects";
+import {
+  type CommunityContributionRuleDto,
+  type ContributionCollectionStatus,
+  type DailyContributionSummary,
+  type PeriodContributionSummary,
+} from "@/lib/community-contribution-shared";
 
-export type ContributionCollectionStatus = CommunityContributionCollectionStatus;
+export type {
+  CommunityContributionRuleDto,
+  ContributionCollectionStatus,
+  DailyContributionSummary,
+  PeriodContributionSummary,
+} from "@/lib/community-contribution-shared";
 
-export const CONTRIBUTION_COLLECTION_LABELS: Record<ContributionCollectionStatus, string> = {
-  COLLECTED: "Collected",
-  PENDING: "Pending",
-};
+export {
+  COMMUNITY_CONTRIBUTION_FIELD_HINT,
+  CONTRIBUTION_COLLECTION_LABELS,
+  CONTRIBUTION_RECIPIENT_LABELS,
+  formatContributionInr,
+} from "@/lib/community-contribution-shared";
 
-export const CONTRIBUTION_RECIPIENT_LABELS: Record<CommunityContributionRecipientType, string> = {
-  NGO: "NGO (direct)",
-  PARTNER: "Partner / SHG",
-};
-
-/** Shown near data-entry fields — avoids “profit” or “fee” wording. */
-export const COMMUNITY_CONTRIBUTION_FIELD_HINT =
-  "Community contribution — amount paid by the beneficiary toward the service (not NGO profit).";
-
-export function formatContributionInr(amount: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-export interface CommunityContributionRuleDto {
-  id: string;
-  projectId: string;
-  serviceId: string;
-  serviceName?: string;
-  amountPerBeneficiary: number;
-  recipientType: CommunityContributionRecipientType;
-  partnerId: string | null;
-  partnerName: string | null;
-  isActive: boolean;
+function decimalToNumber(value: unknown): number | null {
+  if (value == null) return null;
+  return Number(value);
 }
 
 export function serializeContributionRule(
@@ -75,7 +60,6 @@ export interface CreateContributionInput {
   collectionStatus?: ContributionCollectionStatus;
 }
 
-/** Create a ledger row when a service is registered, if a rule exists for this project+service. */
 export async function createContributionForDelivery(input: CreateContributionInput) {
   const rule = await findContributionRule(input.projectId, input.serviceId);
   if (!rule) return null;
@@ -103,7 +87,6 @@ export async function createContributionForDelivery(input: CreateContributionInp
   });
 }
 
-/** Create entry on delivery completion if missing (legacy deliveries without entry). */
 export async function ensureContributionForDelivery(
   deliveryId: string,
   enteredById: string,
@@ -165,7 +148,6 @@ export function serializeContributionEntry(
   };
 }
 
-/** Push catalog contribution settings to database rules (project setup → portal). */
 export async function syncCatalogContributionRules(
   projectId: string,
   catalog: SetupCatalogItem[]
@@ -192,27 +174,6 @@ export async function syncCatalogContributionRules(
       },
     });
   }
-}
-
-export interface PeriodContributionSummary {
-  collectedCount: number;
-  collectedAmount: number;
-  pendingCount: number;
-  pendingAmount: number;
-  totalEntries: number;
-  byService: Array<{
-    serviceId: string;
-    serviceName: string;
-    collectedAmount: number;
-    pendingAmount: number;
-  }>;
-  byRecipient: Array<{
-    recipientType: CommunityContributionRecipientType;
-    partnerName: string | null;
-    collectedAmount: number;
-    pendingAmount: number;
-  }>;
-  byMonth: Array<{ month: string; collected: number; pending: number }>;
 }
 
 export async function buildPeriodContributionSummary(options: {
@@ -307,30 +268,6 @@ function dayBounds(dateKey: string): { start: Date; end: Date } {
   const start = new Date(`${dateKey}T00:00:00.000`);
   const end = new Date(`${dateKey}T23:59:59.999`);
   return { start, end };
-}
-
-export interface DailyContributionSummary {
-  date: string;
-  projectId: string | null;
-  collectedCount: number;
-  collectedAmount: number;
-  pendingCount: number;
-  pendingAmount: number;
-  totalEntries: number;
-  byService: Array<{
-    serviceId: string;
-    serviceName: string;
-    collectedCount: number;
-    collectedAmount: number;
-    pendingCount: number;
-    pendingAmount: number;
-  }>;
-  byRecipient: Array<{
-    recipientType: CommunityContributionRecipientType;
-    partnerName: string | null;
-    collectedAmount: number;
-    pendingAmount: number;
-  }>;
 }
 
 export async function buildDailyContributionSummary(options: {

@@ -8,7 +8,7 @@ import {
   ContributionCollectionStatus,
   CommunityContributionRuleDto,
   formatContributionInr,
-} from "@/lib/community-contribution";
+} from "@/lib/community-contribution-shared";
 
 interface CommunityContributionFieldsProps {
   projectId?: string;

@@ -15,7 +15,7 @@ import { BeneficiaryCategory, BeneficiaryCohort } from "@/generated/prisma/enums
 import { CohortMultiSelect } from "@/components/beneficiaries/CohortMultiSelect";
 import { BENEFICIARY_CATEGORY_LABELS } from "@/lib/service-portal-utils";
 import { CommunityContributionFields } from "@/components/community-contribution/CommunityContributionFields";
-import { ContributionCollectionStatus } from "@/lib/community-contribution";
+import { ContributionCollectionStatus } from "@/lib/community-contribution-shared";
 
 interface PortalBeneficiary {
   id: string;

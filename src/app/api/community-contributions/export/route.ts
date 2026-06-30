@@ -7,7 +7,7 @@ import { decimalToNumber } from "@/lib/beneficiary-utils";
 import {
   CONTRIBUTION_COLLECTION_LABELS,
   CONTRIBUTION_RECIPIENT_LABELS,
-} from "@/lib/community-contribution";
+} from "@/lib/community-contribution-shared";
 import { buildWorkbook, safeExportFilename } from "@/lib/excelUtils";
 import * as XLSX from "xlsx";
 

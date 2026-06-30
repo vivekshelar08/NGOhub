@@ -8,7 +8,7 @@ import {
   CONTRIBUTION_RECIPIENT_LABELS,
   DailyContributionSummary,
   formatContributionInr,
-} from "@/lib/community-contribution";
+} from "@/lib/community-contribution-shared";
 import { localDateKey } from "@/lib/hr-utils";
 
 interface CommunityContributionDaySummaryProps {

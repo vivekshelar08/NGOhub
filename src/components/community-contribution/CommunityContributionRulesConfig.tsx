@@ -9,7 +9,7 @@ import {
   CONTRIBUTION_RECIPIENT_LABELS,
   CommunityContributionRuleDto,
   formatContributionInr,
-} from "@/lib/community-contribution";
+} from "@/lib/community-contribution-shared";
 
 interface ServiceOption {
   id: string;

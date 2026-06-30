@@ -5,7 +5,7 @@ import {
   CONTRIBUTION_COLLECTION_LABELS,
   ContributionCollectionStatus,
   formatContributionInr,
-} from "@/lib/community-contribution";
+} from "@/lib/community-contribution-shared";
 
 interface ContributionSummary {
   id: string;
