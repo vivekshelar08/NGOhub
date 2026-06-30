@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { parseDateOnly } from "@/lib/hr-utils";
 import { BENEFICIARY_CATEGORY_LABELS } from "@/lib/service-portal-utils";
 import type { AnalyticsOverview, ChartPoint, MonthlySeriesPoint } from "@/lib/analytics";
+import { buildPeriodContributionSummary } from "@/lib/community-contribution";
 
 function buildDateFilter(from?: string | null, to?: string | null) {
   if (!from && !to) return undefined;
@@ -79,6 +80,7 @@ export async function GET(request: Request) {
     donations,
     expenses,
     volunteerHours,
+    contributionSummary,
   ] = await Promise.all([
     prisma.beneficiary.findMany({
       where: beneficiaryWhere,
@@ -132,6 +134,17 @@ export async function GET(request: Request) {
           select: { hours: true, activityDate: true },
         })
       : Promise.resolve([]),
+    buildPeriodContributionSummary({
+      projectId,
+      from: from ? parseDateOnly(from) : undefined,
+      to: to
+        ? (() => {
+            const end = parseDateOnly(to);
+            end.setHours(23, 59, 59, 999);
+            return end;
+          })()
+        : undefined,
+    }),
   ]);
 
   const categoryMap = new Map<string, number>();
@@ -223,6 +236,9 @@ export async function GET(request: Request) {
       donationCount: canFinance ? donations.length : null,
       volunteerHours: volunteerHoursTotal,
       expensesTotal,
+      communityContributionCollected: contributionSummary.collectedAmount,
+      communityContributionPending: contributionSummary.pendingAmount,
+      communityContributionEntries: contributionSummary.totalEntries,
     },
     beneficiariesByCategory,
     beneficiariesByMonth,
@@ -230,6 +246,15 @@ export async function GET(request: Request) {
     expensesByCategory,
     volunteerHoursByMonth,
     meetingsByStatus,
+    communityContributionsByMonth: contributionSummary.byMonth.map((m) => ({
+      month: m.month,
+      collected: m.collected,
+      pending: m.pending,
+    })),
+    communityContributionsByService: contributionSummary.byService.map((s) => ({
+      name: s.serviceName,
+      value: Math.round(s.collectedAmount + s.pendingAmount),
+    })),
     recentMeetings: meetings.slice(0, 8).map((m) => ({
       id: m.id,
       title: m.title,

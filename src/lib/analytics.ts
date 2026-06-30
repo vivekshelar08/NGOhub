@@ -25,6 +25,9 @@ export interface AnalyticsOverview {
     donationCount: number | null;
     volunteerHours: number | null;
     expensesTotal: number | null;
+    communityContributionCollected: number | null;
+    communityContributionPending: number | null;
+    communityContributionEntries: number | null;
   };
   beneficiariesByCategory: ChartPoint[];
   beneficiariesByMonth: MonthlySeriesPoint[];
@@ -32,6 +35,8 @@ export interface AnalyticsOverview {
   expensesByCategory: ChartPoint[];
   volunteerHoursByMonth: MonthlySeriesPoint[];
   meetingsByStatus: ChartPoint[];
+  communityContributionsByMonth: MonthlySeriesPoint[];
+  communityContributionsByService: ChartPoint[];
   recentMeetings: {
     id: string;
     title: string;

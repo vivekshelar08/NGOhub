@@ -49,6 +49,8 @@ export interface BeneficiaryEntry {
   beneficiaryCode?: string;
   /** Special cohort tags (PWD, migrant, etc.) */
   cohorts?: string[];
+  /** Whether beneficiary community contribution was collected at data entry. */
+  contributionCollectionStatus?: "COLLECTED" | "PENDING";
 }
 
 export interface FileAttachment {

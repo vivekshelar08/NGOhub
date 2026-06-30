@@ -9,6 +9,7 @@ import {
 } from "@/lib/validators";
 import { decimalToNumber } from "@/lib/beneficiary-utils";
 import { computeRecheckDueDate } from "@/lib/service-portal-utils";
+import { createContributionForDelivery, serializeContributionEntry } from "@/lib/community-contribution";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -26,6 +27,9 @@ function serializeBeneficiaryDetail(b: NonNullable<Awaited<ReturnType<typeof fet
       objectionClearedAt: d.objectionClearedAt?.toISOString() ?? null,
       createdAt: d.createdAt.toISOString(),
       updatedAt: d.updatedAt.toISOString(),
+      communityContribution: d.communityContribution
+        ? serializeContributionEntry(d.communityContribution)
+        : null,
       stepProgress: d.stepProgress.map((p) => ({
         ...p,
         completedAt: p.completedAt.toISOString(),
@@ -63,6 +67,9 @@ async function fetchBeneficiary(id: string) {
               completedBy: { select: { id: true, name: true } },
               step: { select: { id: true, stepOrder: true, name: true } },
             },
+          },
+          communityContribution: {
+            include: { service: { select: { name: true } } },
           },
         },
       },
@@ -166,12 +173,25 @@ export async function POST(request: Request, { params }: RouteParams) {
       include: {
         service: { select: { id: true, name: true } },
         enteredBy: { select: { id: true, name: true } },
+        beneficiary: { select: { projectId: true } },
       },
     });
+
+    if (delivery.beneficiary.projectId) {
+      await createContributionForDelivery({
+        projectId: delivery.beneficiary.projectId,
+        beneficiaryId: id,
+        serviceDeliveryId: delivery.id,
+        serviceId: parsed.data.serviceId,
+        enteredById: user.id,
+        collectionStatus: parsed.data.contributionCollectionStatus,
+      });
+    }
 
     return NextResponse.json({
       delivery: {
         ...delivery,
+        beneficiary: undefined,
         recheckDueDate: delivery.recheckDueDate.toISOString(),
         recheckedAt: delivery.recheckedAt?.toISOString() ?? null,
         createdAt: delivery.createdAt.toISOString(),

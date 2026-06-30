@@ -318,6 +318,14 @@ export function ReportDashboardCharts({
                 hint="Logged hours"
               />
             )}
+            {analytics?.kpis.communityContributionEntries != null &&
+              analytics.kpis.communityContributionEntries > 0 && (
+                <StatCard
+                  label="Community Contribution"
+                  value={formatCurrency(analytics.kpis.communityContributionCollected ?? 0)}
+                  hint={`${formatCurrency(analytics.kpis.communityContributionPending ?? 0)} pending · ${analytics.kpis.communityContributionEntries} entries`}
+                />
+              )}
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
@@ -394,6 +402,26 @@ export function ReportDashboardCharts({
               )}
             </ChartCard>
           </div>
+
+          {(analytics?.communityContributionsByMonth?.length ?? 0) > 0 && (
+            <ChartCard title="Community contribution trend (collected vs pending)">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={analytics?.communityContributionsByMonth ?? []}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip
+                    formatter={(value) =>
+                      formatCurrency(typeof value === "number" ? value : Number(value ?? 0))
+                    }
+                  />
+                  <Legend />
+                  <Bar dataKey="collected" name="Collected" fill="#10b981" />
+                  <Bar dataKey="pending" name="Pending" fill="#f59e0b" />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          )}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card className="p-4">

@@ -27,6 +27,7 @@ const SECTION_META: Array<{
   { key: "inputs", label: "Inputs", icon: BarChart3, accent: "border-slate-200 bg-slate-50" },
   { key: "outputs", label: "Outputs", icon: TrendingUp, accent: "border-blue-200 bg-blue-50" },
   { key: "outcomes", label: "Outcomes", icon: Target, accent: "border-emerald-200 bg-emerald-50" },
+  { key: "communityContribution", label: "Community Contribution", icon: Users, accent: "border-teal-200 bg-teal-50" },
   { key: "impact", label: "Long-term Impact", icon: Users, accent: "border-violet-200 bg-violet-50" },
   { key: "lessonsLearned", label: "Lessons Learned", icon: BookOpen, accent: "border-amber-200 bg-amber-50" },
 ];

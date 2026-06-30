@@ -15,6 +15,7 @@ import { BENEFICIARY_CATEGORY_LABELS } from "@/lib/service-portal-utils";
 import { parseDateOnly } from "@/lib/hr-utils";
 import { TASK_STATUS_LABELS } from "@/lib/activities";
 import type { ActivityTaskStatus } from "@/lib/activities";
+import { buildPeriodContributionSummary } from "@/lib/community-contribution";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -438,6 +439,18 @@ export async function POST(request: Request) {
 
       const charts = await buildImpactChartsPayload({ ...body, reportType: "impact" });
 
+      const contributionSummary = await buildPeriodContributionSummary({
+        projectId: body.projectId,
+        from: body.from ? parseDateOnly(body.from) : undefined,
+        to: body.to
+          ? (() => {
+              const end = parseDateOnly(body.to!);
+              end.setHours(23, 59, 59, 999);
+              return end;
+            })()
+          : undefined,
+      });
+
       const impactPayload: ImpactReportPayload = {
         ...body,
         reportType: "impact",
@@ -445,6 +458,9 @@ export async function POST(request: Request) {
           ...finance,
           urgentCases,
           caseStudies,
+          communityContributionCollected: contributionSummary.collectedAmount,
+          communityContributionPending: contributionSummary.pendingAmount,
+          communityContributionEntries: contributionSummary.totalEntries,
         },
         charts,
       };

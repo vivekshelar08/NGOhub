@@ -90,6 +90,12 @@ export interface SetupCatalogItem {
   totalBeneficiaries: number;
   /** Set when imported from the proposal (optional). */
   sourceProposalActivityId?: string;
+  /** Service portal service id — links catalog line to a deliverable service. */
+  linkedServiceId?: string;
+  /** Per-beneficiary community contribution amount (₹) for this catalog line. */
+  communityContributionAmount?: number;
+  communityContributionRecipientType?: "NGO" | "PARTNER";
+  communityContributionPartnerName?: string;
 }
 
 /**

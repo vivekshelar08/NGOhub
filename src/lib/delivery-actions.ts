@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ServiceDeliveryStatus } from "@/generated/prisma/enums";
+import { ensureContributionForDelivery } from "@/lib/community-contribution";
 
 const deliveryInclude = {
   service: {
@@ -42,7 +43,7 @@ export async function approveDelivery(deliveryId: string, userId: string) {
   const now = new Date();
 
   if (steps.length === 0) {
-    return prisma.serviceDelivery.update({
+    const updated = await prisma.serviceDelivery.update({
       where: { id: deliveryId },
       data: {
         status: "COMPLETED",
@@ -51,6 +52,8 @@ export async function approveDelivery(deliveryId: string, userId: string) {
       },
       include: deliveryInclude,
     });
+    await ensureContributionForDelivery(deliveryId, userId);
+    return updated;
   }
 
   return prisma.serviceDelivery.update({
@@ -113,7 +116,7 @@ export async function advanceDeliveryStep(
     });
   }
 
-  return prisma.serviceDelivery.update({
+  const updated = await prisma.serviceDelivery.update({
     where: { id: deliveryId },
     data: {
       status: "COMPLETED",
@@ -121,6 +124,8 @@ export async function advanceDeliveryStep(
     },
     include: deliveryInclude,
   });
+  await ensureContributionForDelivery(deliveryId, userId);
+  return updated;
 }
 
 export async function raiseDeliveryObjection(
@@ -220,7 +225,7 @@ export async function setLegacyDeliveryStatus(
     currentStepId = null;
   }
 
-  return prisma.serviceDelivery.update({
+  const updated = await prisma.serviceDelivery.update({
     where: { id: deliveryId },
     data: {
       status,
@@ -233,6 +238,12 @@ export async function setLegacyDeliveryStatus(
     },
     include: deliveryInclude,
   });
+
+  if (status === "COMPLETED") {
+    await ensureContributionForDelivery(deliveryId, userId);
+  }
+
+  return updated;
 }
 
 export function serializeDelivery(d: NonNullable<Awaited<ReturnType<typeof fetchDeliveryWithProgress>>>) {

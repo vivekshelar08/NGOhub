@@ -46,6 +46,9 @@ export interface ImpactReportPayload extends ReportFilterPayload {
     activeDeliveries?: number;
     meetingsApproved?: number;
     financePermitted?: boolean;
+    communityContributionCollected?: number;
+    communityContributionPending?: number;
+    communityContributionEntries?: number;
   };
   achievementDetail?: {
     byStatus?: Record<string, number>;
@@ -80,6 +83,7 @@ export interface ImpactReportSections {
   beneficiaryImpact: string;
   kpiProgress: string;
   financialHighlights?: string;
+  communityContribution?: string;
   recommendations: string;
 }
 
@@ -381,6 +385,15 @@ function buildImpactSections(payload: ImpactReportPayload): ImpactReportSections
     insights.push("Broaden date or project filters to surface more data-driven insights.");
   }
 
+  const communityContribution =
+    analytics?.communityContributionEntries != null && analytics.communityContributionEntries > 0
+      ? [
+          `Community contributions (beneficiary-paid amounts toward services, not NGO profit) totalled ${formatInr(analytics.communityContributionCollected ?? 0)} collected`,
+          ` with ${formatInr(analytics.communityContributionPending ?? 0)} still pending across ${analytics.communityContributionEntries} registered service entries.`,
+          " Amounts are routed per project rules to the NGO or partner SHGs as configured.",
+        ].join("")
+      : "No community contribution entries were recorded in this period. Configure per-service rates in project setup or Service Portal.";
+
   const impact = [
     `Sustained community impact depends on converting ${completed} completed activities into lasting beneficiary outcomes.`,
     analytics?.caseStudies
@@ -481,6 +494,7 @@ function buildImpactSections(payload: ImpactReportPayload): ImpactReportSections
     beneficiaryImpact,
     kpiProgress,
     financialHighlights,
+    communityContribution,
     recommendations,
   };
 }
@@ -582,6 +596,10 @@ export function buildImpactTemplateNarrative(
     "",
     sections.sdgContribution,
     "",
+    "## Community Contribution",
+    "",
+    sections.communityContribution ?? "No community contribution data for this period.",
+    "",
     "## Lessons Learned",
     "",
     sections.lessonsLearned,
@@ -632,7 +650,10 @@ export async function generateImpactReport(payload: ImpactReportPayload): Promis
   if (config.provider !== "template") {
     const analysisResult = await generateImpactAnalysis(dataContext);
     if (analysisResult) {
-      const sections = analysisToSections(analysisResult.analysis);
+      const sections = {
+        ...analysisToSections(analysisResult.analysis),
+        communityContribution: templateSections.communityContribution,
+      };
       return {
         narrative: buildImpactTemplateNarrative(payload, sections),
         provider: analysisResult.provider,

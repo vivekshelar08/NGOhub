@@ -5,6 +5,7 @@ import { hasFeature } from "@/lib/role-features";
 import { beneficiarySchema } from "@/lib/validators";
 import { generateBeneficiaryCode, decimalToNumber } from "@/lib/beneficiary-utils";
 import { computeRecheckDueDate } from "@/lib/service-portal-utils";
+import { createContributionForDelivery } from "@/lib/community-contribution";
 
 function serializeBeneficiary(b: Record<string, unknown>) {
   const monthlyIncome = b.monthlyIncome;
@@ -166,7 +167,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { serviceId, projectId, ...beneficiaryData } = parsed.data;
+  const { serviceId, projectId, contributionCollectionStatus, ...beneficiaryData } = parsed.data;
 
   if (serviceId) {
     const service = await prisma.service.findUnique({ where: { id: serviceId } });
@@ -203,6 +204,17 @@ export async function POST(request: Request) {
       },
     },
   });
+
+  if (serviceId && beneficiary.deliveries[0]) {
+    await createContributionForDelivery({
+      projectId,
+      beneficiaryId: beneficiary.id,
+      serviceDeliveryId: beneficiary.deliveries[0].id,
+      serviceId,
+      enteredById: user.id,
+      collectionStatus: contributionCollectionStatus,
+    });
+  }
 
   return NextResponse.json(
     { beneficiary: serializeBeneficiary(beneficiary) },

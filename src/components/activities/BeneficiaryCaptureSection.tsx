@@ -14,6 +14,8 @@ import {
 import { BeneficiaryCategory, BeneficiaryCohort } from "@/generated/prisma/enums";
 import { CohortMultiSelect } from "@/components/beneficiaries/CohortMultiSelect";
 import { BENEFICIARY_CATEGORY_LABELS } from "@/lib/service-portal-utils";
+import { CommunityContributionFields } from "@/components/community-contribution/CommunityContributionFields";
+import { ContributionCollectionStatus } from "@/lib/community-contribution";
 
 interface PortalBeneficiary {
   id: string;
@@ -54,6 +56,7 @@ const EMPTY_FORM = (): BeneficiaryEntry => ({
   address: "",
   location: "",
   notes: "",
+  contributionCollectionStatus: "PENDING" as ContributionCollectionStatus,
 });
 
 const inputClass =
@@ -553,6 +556,16 @@ export function BeneficiaryCaptureSection({
                   </p>
                 ) : null}
               </div>
+              {projectId && form.serviceId && (
+                <div className="sm:col-span-2">
+                  <CommunityContributionFields
+                    projectId={projectId}
+                    serviceId={form.serviceId}
+                    value={form.contributionCollectionStatus ?? "PENDING"}
+                    onChange={(status) => updateFormField("contributionCollectionStatus", status)}
+                  />
+                </div>
+              )}
               <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row sm:flex-wrap">
                 <label className="flex min-h-[40px] items-center gap-2 text-sm text-slate-700">
                   <input

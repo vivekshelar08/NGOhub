@@ -59,6 +59,11 @@ import {
   exportSingleBeneficiaryExcel,
 } from "@/lib/beneficiaryExport";
 import { hasFeature } from "@/lib/role-features";
+import { CommunityContributionDaySummary } from "@/components/community-contribution/CommunityContributionDaySummary";
+import { CommunityContributionFields } from "@/components/community-contribution/CommunityContributionFields";
+import { CommunityContributionRulesConfig } from "@/components/community-contribution/CommunityContributionRulesConfig";
+import { DeliveryContributionPanel } from "@/components/community-contribution/DeliveryContributionPanel";
+import { ContributionCollectionStatus } from "@/lib/community-contribution";
 
 interface ServicePortalViewProps {
   userId: string;
@@ -103,6 +108,13 @@ interface DeliverySummary {
   enteredBy?: { id: string; name: string };
   recheckedBy?: { id: string; name: string } | null;
   objectionRaisedBy?: { id: string; name: string } | null;
+  communityContribution?: {
+    id: string;
+    amount: number;
+    collectionStatus: "COLLECTED" | "PENDING";
+    recipientType: string;
+    partnerName: string | null;
+  } | null;
 }
 
 interface BeneficiarySummary {
@@ -189,6 +201,7 @@ const EMPTY_FORM = {
   notes: "",
   projectId: "",
   serviceId: "",
+  contributionCollectionStatus: "PENDING" as ContributionCollectionStatus,
 };
 
 function deliveryLabel(service: DeliverySummary["service"]) {
@@ -232,6 +245,8 @@ export function ServicePortalView({
   const [followUpNote, setFollowUpNote] = useState("");
   const [followUpDeliveryId, setFollowUpDeliveryId] = useState("");
   const [addServiceId, setAddServiceId] = useState("");
+  const [addServiceContributionStatus, setAddServiceContributionStatus] =
+    useState<ContributionCollectionStatus>("PENDING");
   const [editingProfile, setEditingProfile] = useState(false);
   const [editForm, setEditForm] = useState({
     name: "",
@@ -500,6 +515,9 @@ export function ServicePortalView({
           notes: form.notes || undefined,
           projectId: form.projectId,
           serviceId: form.serviceId || undefined,
+          contributionCollectionStatus: form.serviceId
+            ? form.contributionCollectionStatus
+            : undefined,
         }),
       });
       const data = await res.json();
@@ -608,12 +626,17 @@ export function ServicePortalView({
       const res = await fetch(`/api/beneficiaries/${beneficiaryId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "add_service", serviceId: addServiceId }),
+        body: JSON.stringify({
+          action: "add_service",
+          serviceId: addServiceId,
+          contributionCollectionStatus: addServiceContributionStatus,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to add service");
 
       setAddServiceId("");
+      setAddServiceContributionStatus("PENDING");
       setSuccess("New service added for beneficiary");
       await loadBeneficiaryDetail(beneficiaryId);
     } catch (err) {
@@ -774,6 +797,14 @@ export function ServicePortalView({
           <p className="mt-1 text-2xl font-bold text-red-700">{overdueRechecks.length}</p>
         </Card>
       </div>
+
+      {selectedProjectId && (
+        <CommunityContributionDaySummary
+          projectId={selectedProjectId}
+          mineOnly={!canManageServices}
+          className="p-0"
+        />
+      )}
 
       {(error || success) && (
         <div
@@ -1041,6 +1072,17 @@ export function ServicePortalView({
               </div>
             )}
 
+            {form.projectId && form.serviceId && (
+              <CommunityContributionFields
+                projectId={form.projectId}
+                serviceId={form.serviceId}
+                value={form.contributionCollectionStatus}
+                onChange={(status) =>
+                  setForm({ ...form, contributionCollectionStatus: status })
+                }
+              />
+            )}
+
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <label className="flex min-h-[44px] items-center gap-2 text-sm">
                 <input
@@ -1256,6 +1298,15 @@ export function ServicePortalView({
 
       {tab === "services" && canManageServices && (
         <div className="space-y-6">
+          <CommunityContributionRulesConfig
+            projectId={selectedProjectId}
+            projectTitle={selectedProject?.title}
+            services={services.filter((s) => s.isActive !== false).map((s) => ({
+              id: s.id,
+              name: s.name,
+            }))}
+          />
+
           <Card>
             <CardTitle className="mb-4 flex items-center gap-2">
               <Plus className="h-5 w-5 text-brand-teal" />
@@ -1539,30 +1590,47 @@ export function ServicePortalView({
               <ClipboardList className="h-5 w-5 text-brand-teal" />
               Service Deliveries
             </CardTitle>
-            <div className="mb-4 flex flex-wrap gap-2">
-              <select
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                value={addServiceId}
-                onChange={(e) => setAddServiceId(e.target.value)}
-              >
-                <option value="">Add another service...</option>
-                {activeServices.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-              <Button
-                size="sm"
-                disabled={!addServiceId || loading}
-                onClick={() => handleAddServiceToBeneficiary(selectedBeneficiary.id)}
-              >
-                Add Service
-              </Button>
+            <div className="mb-4 space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <select
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={addServiceId}
+                  onChange={(e) => setAddServiceId(e.target.value)}
+                >
+                  <option value="">Add another service...</option>
+                  {activeServices.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                <Button
+                  size="sm"
+                  disabled={!addServiceId || loading}
+                  onClick={() => handleAddServiceToBeneficiary(selectedBeneficiary.id)}
+                >
+                  Add Service
+                </Button>
+              </div>
+              {(selectedBeneficiary.projectId || selectedProjectId) && addServiceId && (
+                <CommunityContributionFields
+                  projectId={selectedBeneficiary.projectId || selectedProjectId}
+                  serviceId={addServiceId}
+                  value={addServiceContributionStatus}
+                  onChange={setAddServiceContributionStatus}
+                />
+              )}
             </div>
 
             <div className="space-y-4">
               {(selectedBeneficiary.deliveries ?? []).map((d) => (
                 <div key={d.id} className="rounded-lg border border-slate-200 p-4">
                   <h4 className="mb-3 font-semibold text-slate-900">{deliveryLabel(d.service)}</h4>
+                  {d.communityContribution && (
+                    <DeliveryContributionPanel
+                      contribution={d.communityContribution}
+                      canEdit={canManageDelivery(userRole, userId, d.enteredBy?.id ?? "")}
+                      onUpdated={() => void loadBeneficiaryDetail(selectedBeneficiary.id)}
+                    />
+                  )}
                   <DeliveryProgressPanel
                     delivery={d}
                     loading={loading}

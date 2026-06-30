@@ -39,6 +39,7 @@ function portalPayload(entry: BeneficiaryEntry, projectId: string) {
     isCaseStudy: entry.isCaseStudy ?? false,
     projectId,
     serviceId: entry.serviceId || undefined,
+    contributionCollectionStatus: entry.contributionCollectionStatus,
   };
 }
 
@@ -80,6 +81,7 @@ export async function syncBeneficiariesToPortal(
             action: "add_service",
             serviceId: entry.serviceId,
             notes: entry.notes || undefined,
+            contributionCollectionStatus: entry.contributionCollectionStatus,
           }),
         });
         const data = await res.json();

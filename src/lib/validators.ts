@@ -198,6 +198,7 @@ export const beneficiarySchema = z.object({
   notes: z.string().optional(),
   projectId: z.string().min(1, "Select a project"),
   serviceId: z.string().uuid("Select a service").optional(),
+  contributionCollectionStatus: z.enum(["COLLECTED", "PENDING"]).optional(),
 });
 
 export const updateBeneficiarySchema = beneficiarySchema
@@ -227,6 +228,16 @@ export const followUpSchema = z.object({
 export const addServiceToBeneficiarySchema = z.object({
   serviceId: z.string().uuid(),
   notes: z.string().optional(),
+  contributionCollectionStatus: z.enum(["COLLECTED", "PENDING"]).optional(),
+});
+
+export const communityContributionRuleSchema = z.object({
+  projectId: z.string().min(1, "Project is required"),
+  serviceId: z.string().uuid("Select a service"),
+  amountPerBeneficiary: z.number().positive("Amount must be greater than zero"),
+  recipientType: z.enum(["NGO", "PARTNER"]).default("NGO"),
+  partnerId: z.string().uuid().optional(),
+  partnerName: z.string().max(200).optional(),
 });
 
 export const activityRequestSchema = z.object({

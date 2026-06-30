@@ -69,6 +69,16 @@ enum ServiceDeliveryStatus {
   COMPLETED
 }
 
+enum CommunityContributionCollectionStatus {
+  COLLECTED
+  PENDING
+}
+
+enum CommunityContributionRecipientType {
+  NGO
+  PARTNER
+}
+
 enum BeneficiaryCategory {
   GENERAL
   SC
@@ -437,6 +447,7 @@ model User {
   partnerUcsReviewed       PartnerUcSubmission[]      @relation("PartnerUcsReviewed")
   payrollAllocations       PayrollProjectAllocation[] @relation("EmployeePayrollAllocations")
   safeguardingAssigned     SafeguardingIncident[]     @relation("SafeguardingAssigned")
+  communityContributionsEntered CommunityContributionEntry[] @relation("ContributionEnteredBy")
 }
 
 model RefreshToken {
@@ -690,6 +701,8 @@ model Service {
   updatedAt   DateTime      @updatedAt
   steps       ServiceStep[]
   deliveries  ServiceDelivery[]
+  contributionRules   CommunityContributionRule[]
+  contributionEntries CommunityContributionEntry[]
 }
 
 model ServiceStep {
@@ -738,6 +751,7 @@ model Beneficiary {
   deliveries      ServiceDelivery[]
   followUps       BeneficiaryFollowUp[]
   feedbacks       BeneficiaryFeedback[]
+  communityContributions CommunityContributionEntry[]
 
   @@index([mobile])
   @@index([beneficiaryCode])
@@ -775,10 +789,54 @@ model ServiceDelivery {
   updatedAt      DateTime              @updatedAt
   followUps      BeneficiaryFollowUp[]
   stepProgress   DeliveryStepProgress[]
+  communityContribution CommunityContributionEntry?
 
   @@index([status, recheckDueDate])
   @@index([beneficiaryId])
   @@index([objectionActive])
+}
+
+model CommunityContributionRule {
+  id                    String                            @id @default(uuid())
+  projectId             String
+  serviceId             String
+  service               Service                           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  amountPerBeneficiary  Decimal                           @db.Decimal(12, 2)
+  recipientType         CommunityContributionRecipientType @default(NGO)
+  partnerId             String?
+  partner               PartnerOrganization?              @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  partnerName           String?
+  isActive              Boolean                           @default(true)
+  createdAt             DateTime                          @default(now())
+  updatedAt             DateTime                          @updatedAt
+
+  @@unique([projectId, serviceId])
+  @@index([projectId])
+}
+
+model CommunityContributionEntry {
+  id               String                               @id @default(uuid())
+  projectId        String
+  beneficiaryId    String
+  beneficiary      Beneficiary                          @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  serviceDeliveryId String                              @unique
+  serviceDelivery  ServiceDelivery                      @relation(fields: [serviceDeliveryId], references: [id], onDelete: Cascade)
+  serviceId        String
+  service          Service                              @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  amount           Decimal                              @db.Decimal(12, 2)
+  collectionStatus CommunityContributionCollectionStatus @default(PENDING)
+  recipientType    CommunityContributionRecipientType
+  partnerId        String?
+  partnerName      String?
+  collectedAt      DateTime?
+  enteredById      String
+  enteredBy        User                                 @relation("ContributionEnteredBy", fields: [enteredById], references: [id])
+  createdAt        DateTime                             @default(now())
+  updatedAt        DateTime                             @updatedAt
+
+  @@index([projectId, createdAt])
+  @@index([enteredById, createdAt])
+  @@index([collectionStatus])
 }
 
 model DeliveryStepProgress {
@@ -1173,6 +1231,7 @@ model PartnerOrganization {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   subGrants          SubGrantAgreement[]
+  contributionRules  CommunityContributionRule[]
 }
 
 model AssetItem {
