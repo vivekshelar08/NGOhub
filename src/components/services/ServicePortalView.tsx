@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -48,7 +48,7 @@ import {
 import { BeneficiaryFeedbackSection } from "./BeneficiaryFeedbackSection";
 import { SatisfactionPromptModal } from "./SatisfactionPromptModal";
 import { WalkthroughHost } from "@/components/ui/WalkthroughHost";
-import { getPortalEligibleProjects, ProjectProposal } from "@/lib/projects";
+import { getPortalEligibleProjects, listProjectLocations, ProjectProposal } from "@/lib/projects";
 import {
   formatProjectType,
   projectRequiresServiceOnEnrollment,
@@ -284,6 +284,10 @@ export function ServicePortalView({
   };
 
   const selectedProject = portalProjects.find((p) => p.id === selectedProjectId);
+  const projectLocations = useMemo(
+    () => (selectedProject ? listProjectLocations(selectedProject) : []),
+    [selectedProject]
+  );
   const serviceRequiredOnEnrollment = selectedProject
     ? projectRequiresServiceOnEnrollment(selectedProject.projectType)
     : true;
@@ -1076,6 +1080,7 @@ export function ServicePortalView({
               <CommunityContributionFields
                 projectId={form.projectId}
                 serviceId={form.serviceId}
+                location={form.location}
                 value={form.contributionCollectionStatus}
                 onChange={(status) =>
                   setForm({ ...form, contributionCollectionStatus: status })
@@ -1301,6 +1306,7 @@ export function ServicePortalView({
           <CommunityContributionRulesConfig
             projectId={selectedProjectId}
             projectTitle={selectedProject?.title}
+            projectLocations={projectLocations}
             services={services.filter((s) => s.isActive !== false).map((s) => ({
               id: s.id,
               name: s.name,
@@ -1614,6 +1620,7 @@ export function ServicePortalView({
                 <CommunityContributionFields
                   projectId={selectedBeneficiary.projectId || selectedProjectId}
                   serviceId={addServiceId}
+                  location={selectedBeneficiary.location ?? undefined}
                   value={addServiceContributionStatus}
                   onChange={setAddServiceContributionStatus}
                 />

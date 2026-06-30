@@ -234,6 +234,7 @@ export const addServiceToBeneficiarySchema = z.object({
 export const communityContributionRuleSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
   serviceId: z.string().uuid("Select a service"),
+  location: z.string().max(200).default(""),
   amountPerBeneficiary: z.number().positive("Amount must be greater than zero"),
   recipientType: z.enum(["NGO", "PARTNER"]).default("NGO"),
   partnerId: z.string().uuid().optional(),

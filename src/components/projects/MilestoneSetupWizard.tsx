@@ -72,17 +72,6 @@ export function MilestoneSetupWizard({
   const [stepIndex, setStepIndex] = useState(0);
   const [activeMilestoneIndex, setActiveMilestoneIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [portalServices, setPortalServices] = useState<Array<{ id: string; name: string }>>([]);
-
-  useEffect(() => {
-    void fetch("/api/services")
-      .then((res) => res.json())
-      .then((data) => {
-        const list = (data.services ?? []).filter((s: { isActive?: boolean }) => s.isActive !== false);
-        setPortalServices(list.map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })));
-      })
-      .catch(() => setPortalServices([]));
-  }, []);
 
   const typeConfig = useMemo(
     () => getProjectTypeConfig(project.projectType),
@@ -437,32 +426,12 @@ export function MilestoneSetupWizard({
       completedAt: new Date().toISOString(),
     };
 
-    void (async () => {
-      try {
-        upsertProject({ ...project, setup: completedSetup });
-        const hasContributionRules = completedSetup.catalog.some(
-          (c) => c.linkedServiceId && c.communityContributionAmount
-        );
-        if (hasContributionRules) {
-          await fetch("/api/community-contributions/sync-catalog", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              projectId: project.id,
-              catalog: completedSetup.catalog.map((c) => ({
-                linkedServiceId: c.linkedServiceId,
-                communityContributionAmount: c.communityContributionAmount,
-                communityContributionRecipientType: c.communityContributionRecipientType,
-                communityContributionPartnerName: c.communityContributionPartnerName,
-              })),
-            }),
-          });
-        }
-        router.push(`${basePath}/${project.id}`);
-      } catch {
-        setError("Could not complete setup.");
-      }
-    })();
+    try {
+      upsertProject({ ...project, setup: completedSetup });
+      router.push(`${basePath}/${project.id}`);
+    } catch {
+      setError("Could not complete setup.");
+    }
   }
 
   const coordinators = assignableUsers.filter((u) => u.role === "COORDINATOR" || u.role === "MANAGER");
@@ -746,90 +715,6 @@ export function MilestoneSetupWizard({
                       className={fieldClassName()}
                     />
                   </div>
-                  )}
-                  {(showCatalogBeneficiary || typeConfig.catalogMode === "services") && (
-                    <div className="md:col-span-2 space-y-3 rounded-lg border border-dashed border-slate-300 p-3">
-                      <p className={cn("text-xs font-medium", label)}>
-                        Community contribution (per beneficiary)
-                      </p>
-                      <p className={cn("text-xs", muted)}>
-                        Amount paid by beneficiary toward this service — not NGO profit. Synced to Service Portal on setup completion.
-                      </p>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div>
-                          <label className={cn("mb-1 block text-xs font-medium", label)}>
-                            Linked service
-                          </label>
-                          <select
-                            className={fieldClassName()}
-                            value={item.linkedServiceId ?? ""}
-                            onChange={(e) =>
-                              updateCatalogItem(item.id, {
-                                linkedServiceId: e.target.value || undefined,
-                              })
-                            }
-                          >
-                            <option value="">None</option>
-                            {portalServices.map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {s.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className={cn("mb-1 block text-xs font-medium", label)}>
-                            ₹ per beneficiary
-                          </label>
-                          <input
-                            type="number"
-                            min={0}
-                            className={fieldClassName()}
-                            value={item.communityContributionAmount ?? ""}
-                            onChange={(e) =>
-                              updateCatalogItem(item.id, {
-                                communityContributionAmount:
-                                  Number(e.target.value) > 0 ? Number(e.target.value) : undefined,
-                              })
-                            }
-                            placeholder="e.g. 50"
-                          />
-                        </div>
-                        <div>
-                          <label className={cn("mb-1 block text-xs font-medium", label)}>
-                            Routed to
-                          </label>
-                          <select
-                            className={fieldClassName()}
-                            value={item.communityContributionRecipientType ?? "NGO"}
-                            onChange={(e) =>
-                              updateCatalogItem(item.id, {
-                                communityContributionRecipientType: e.target.value as "NGO" | "PARTNER",
-                              })
-                            }
-                          >
-                            <option value="NGO">NGO (direct)</option>
-                            <option value="PARTNER">Partner / SHG</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className={cn("mb-1 block text-xs font-medium", label)}>
-                            Partner / SHG name
-                          </label>
-                          <input
-                            className={fieldClassName()}
-                            disabled={(item.communityContributionRecipientType ?? "NGO") !== "PARTNER"}
-                            value={item.communityContributionPartnerName ?? ""}
-                            onChange={(e) =>
-                              updateCatalogItem(item.id, {
-                                communityContributionPartnerName: e.target.value || undefined,
-                              })
-                            }
-                            placeholder="If routed to SHG"
-                          />
-                        </div>
-                      </div>
-                    </div>
                   )}
                 </div>
               </div>

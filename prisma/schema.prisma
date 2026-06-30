@@ -801,6 +801,8 @@ model CommunityContributionRule {
   projectId             String
   serviceId             String
   service               Service                           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  /** Project place / district / centre — empty string = all locations on project. */
+  location              String                            @default("")
   amountPerBeneficiary  Decimal                           @db.Decimal(12, 2)
   recipientType         CommunityContributionRecipientType @default(NGO)
   partnerId             String?
@@ -810,8 +812,9 @@ model CommunityContributionRule {
   createdAt             DateTime                          @default(now())
   updatedAt             DateTime                          @updatedAt
 
-  @@unique([projectId, serviceId])
+  @@unique([projectId, serviceId, location])
   @@index([projectId])
+  @@index([projectId, location])
 }
 
 model CommunityContributionEntry {

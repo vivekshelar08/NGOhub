@@ -90,12 +90,6 @@ export interface SetupCatalogItem {
   totalBeneficiaries: number;
   /** Set when imported from the proposal (optional). */
   sourceProposalActivityId?: string;
-  /** Service portal service id — links catalog line to a deliverable service. */
-  linkedServiceId?: string;
-  /** Per-beneficiary community contribution amount (₹) for this catalog line. */
-  communityContributionAmount?: number;
-  communityContributionRecipientType?: "NGO" | "PARTNER";
-  communityContributionPartnerName?: string;
 }
 
 /**
@@ -570,6 +564,26 @@ function normalizeProject(raw: ProjectProposal): ProjectProposal {
     setup: cloneSetup(raw.setup),
     status: raw.status ?? "DRAFT",
   };
+}
+
+/** Distinct place names for a project — used for location-wise community contribution rates. */
+export function listProjectLocations(
+  project: Pick<ProjectProposal, "location" | "district" | "state" | "coverageAreas">
+): string[] {
+  const locs = new Set<string>();
+  const add = (value?: string) => {
+    const trimmed = value?.trim();
+    if (trimmed) locs.add(trimmed);
+  };
+  add(project.location);
+  add(project.district);
+  add(project.state);
+  if (project.coverageAreas?.trim()) {
+    for (const part of project.coverageAreas.split(/[,;\n]+/)) {
+      add(part);
+    }
+  }
+  return [...locs].sort((a, b) => a.localeCompare(b));
 }
 
 export function createEmptyProject(id: string): ProjectProposal {

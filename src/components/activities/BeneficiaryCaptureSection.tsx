@@ -561,6 +561,7 @@ export function BeneficiaryCaptureSection({
                   <CommunityContributionFields
                     projectId={projectId}
                     serviceId={form.serviceId}
+                    location={form.location}
                     value={form.contributionCollectionStatus ?? "PENDING"}
                     onChange={(status) => updateFormField("contributionCollectionStatus", status)}
                   />

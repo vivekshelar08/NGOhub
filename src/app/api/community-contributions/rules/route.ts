@@ -11,15 +11,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const projectId = new URL(request.url).searchParams.get("projectId")?.trim();
+  const { searchParams } = new URL(request.url);
+  const projectId = searchParams.get("projectId")?.trim();
   if (!projectId) {
     return NextResponse.json({ error: "projectId is required" }, { status: 400 });
   }
 
+  const location = searchParams.get("location")?.trim() ?? undefined;
+
   const rules = await prisma.communityContributionRule.findMany({
-    where: { projectId, isActive: true },
+    where: {
+      projectId,
+      isActive: true,
+      ...(location !== undefined ? { location } : {}),
+    },
     include: { service: { select: { name: true } } },
-    orderBy: { service: { name: "asc" } },
+    orderBy: [{ location: "asc" }, { service: { name: "asc" } }],
   });
 
   return NextResponse.json({
@@ -42,19 +49,31 @@ export async function POST(request: Request) {
     );
   }
 
-  const { projectId, serviceId, amountPerBeneficiary, recipientType, partnerId, partnerName } =
-    parsed.data;
+  const {
+    projectId,
+    serviceId,
+    location,
+    amountPerBeneficiary,
+    recipientType,
+    partnerId,
+    partnerName,
+  } = parsed.data;
 
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
   if (!service?.isActive) {
     return NextResponse.json({ error: "Service not found or inactive" }, { status: 400 });
   }
 
+  const locationKey = location?.trim() ?? "";
+
   const rule = await prisma.communityContributionRule.upsert({
-    where: { projectId_serviceId: { projectId, serviceId } },
+    where: {
+      projectId_serviceId_location: { projectId, serviceId, location: locationKey },
+    },
     create: {
       projectId,
       serviceId,
+      location: locationKey,
       amountPerBeneficiary,
       recipientType,
       partnerId: partnerId ?? null,

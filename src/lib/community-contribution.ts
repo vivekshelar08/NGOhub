@@ -1,7 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import { CommunityContributionRecipientType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
-import type { SetupCatalogItem } from "@/lib/projects";
 import {
   type CommunityContributionRuleDto,
   type ContributionCollectionStatus,
@@ -36,6 +35,7 @@ export function serializeContributionRule(
     projectId: rule.projectId,
     serviceId: rule.serviceId,
     serviceName: rule.service.name,
+    location: rule.location,
     amountPerBeneficiary: decimalToNumber(rule.amountPerBeneficiary) ?? 0,
     recipientType: rule.recipientType,
     partnerId: rule.partnerId,
@@ -44,9 +44,20 @@ export function serializeContributionRule(
   };
 }
 
-export async function findContributionRule(projectId: string, serviceId: string) {
+export async function findContributionRule(
+  projectId: string,
+  serviceId: string,
+  location?: string
+) {
+  const normalized = location?.trim() ?? "";
+  const specific = await prisma.communityContributionRule.findFirst({
+    where: { projectId, serviceId, location: normalized, isActive: true },
+    include: { service: { select: { name: true } }, partner: { select: { name: true } } },
+  });
+  if (specific || normalized === "") return specific;
+
   return prisma.communityContributionRule.findFirst({
-    where: { projectId, serviceId, isActive: true },
+    where: { projectId, serviceId, location: "", isActive: true },
     include: { service: { select: { name: true } }, partner: { select: { name: true } } },
   });
 }
@@ -58,10 +69,20 @@ export interface CreateContributionInput {
   serviceId: string;
   enteredById: string;
   collectionStatus?: ContributionCollectionStatus;
+  location?: string;
 }
 
 export async function createContributionForDelivery(input: CreateContributionInput) {
-  const rule = await findContributionRule(input.projectId, input.serviceId);
+  let location = input.location?.trim() ?? "";
+  if (!location) {
+    const beneficiary = await prisma.beneficiary.findUnique({
+      where: { id: input.beneficiaryId },
+      select: { location: true },
+    });
+    location = beneficiary?.location?.trim() ?? "";
+  }
+
+  const rule = await findContributionRule(input.projectId, input.serviceId, location);
   if (!rule) return null;
 
   const amount = decimalToNumber(rule.amountPerBeneficiary) ?? 0;
@@ -146,34 +167,6 @@ export function serializeContributionEntry(
     collectedAt: entry.collectedAt?.toISOString() ?? null,
     createdAt: entry.createdAt.toISOString(),
   };
-}
-
-export async function syncCatalogContributionRules(
-  projectId: string,
-  catalog: SetupCatalogItem[]
-): Promise<void> {
-  for (const item of catalog) {
-    if (!item.linkedServiceId || !item.communityContributionAmount) continue;
-    await prisma.communityContributionRule.upsert({
-      where: {
-        projectId_serviceId: { projectId, serviceId: item.linkedServiceId },
-      },
-      create: {
-        projectId,
-        serviceId: item.linkedServiceId,
-        amountPerBeneficiary: item.communityContributionAmount,
-        recipientType: item.communityContributionRecipientType ?? "NGO",
-        partnerName: item.communityContributionPartnerName ?? null,
-        isActive: true,
-      },
-      update: {
-        amountPerBeneficiary: item.communityContributionAmount,
-        recipientType: item.communityContributionRecipientType ?? "NGO",
-        partnerName: item.communityContributionPartnerName ?? null,
-        isActive: true,
-      },
-    });
-  }
 }
 
 export async function buildPeriodContributionSummary(options: {

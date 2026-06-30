@@ -33,6 +33,7 @@ export interface CommunityContributionRuleDto {
   projectId: string;
   serviceId: string;
   serviceName?: string;
+  location: string;
   amountPerBeneficiary: number;
   recipientType: CommunityContributionRecipientType;
   partnerId: string | null;
@@ -83,4 +84,18 @@ export interface DailyContributionSummary {
     collectedAmount: number;
     pendingAmount: number;
   }>;
+}
+
+/** Pick location-specific rate, else project-wide default (empty location). */
+export function resolveContributionRule(
+  rules: CommunityContributionRuleDto[],
+  serviceId: string,
+  location?: string
+): CommunityContributionRuleDto | undefined {
+  const loc = location?.trim() ?? "";
+  const forService = rules.filter((r) => r.serviceId === serviceId);
+  return (
+    forService.find((r) => r.location === loc) ??
+    (loc ? forService.find((r) => r.location === "") : undefined)
+  );
 }

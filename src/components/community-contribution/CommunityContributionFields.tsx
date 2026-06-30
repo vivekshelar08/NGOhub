@@ -8,11 +8,14 @@ import {
   ContributionCollectionStatus,
   CommunityContributionRuleDto,
   formatContributionInr,
+  resolveContributionRule,
 } from "@/lib/community-contribution-shared";
 
 interface CommunityContributionFieldsProps {
   projectId?: string;
   serviceId?: string;
+  /** Beneficiary village / centre — matches manager-configured location rates. */
+  location?: string;
   value: ContributionCollectionStatus;
   onChange: (status: ContributionCollectionStatus) => void;
   /** Pre-loaded rules map (serviceId → rule). If omitted, fetches when projectId set. */
@@ -23,22 +26,21 @@ interface CommunityContributionFieldsProps {
 export function CommunityContributionFields({
   projectId,
   serviceId,
+  location,
   value,
   onChange,
   rulesByService,
   className,
 }: CommunityContributionFieldsProps) {
-  const [rules, setRules] = useState<Record<string, CommunityContributionRuleDto>>(
-    rulesByService ?? {}
-  );
+  const [ruleList, setRuleList] = useState<CommunityContributionRuleDto[]>([]);
 
   useEffect(() => {
     if (rulesByService) {
-      setRules(rulesByService);
+      setRuleList(Object.values(rulesByService));
       return;
     }
     if (!projectId) {
-      setRules({});
+      setRuleList([]);
       return;
     }
     let cancelled = false;
@@ -46,14 +48,10 @@ export function CommunityContributionFields({
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
-        const map: Record<string, CommunityContributionRuleDto> = {};
-        for (const rule of data.rules ?? []) {
-          map[rule.serviceId] = rule;
-        }
-        setRules(map);
+        setRuleList(data.rules ?? []);
       })
       .catch(() => {
-        if (!cancelled) setRules({});
+        if (!cancelled) setRuleList([]);
       });
     return () => {
       cancelled = true;
@@ -62,7 +60,8 @@ export function CommunityContributionFields({
 
   if (!serviceId) return null;
 
-  const rule = rules[serviceId];
+  const rule =
+    rulesByService?.[serviceId] ?? resolveContributionRule(ruleList, serviceId, location);
   if (!rule || rule.amountPerBeneficiary <= 0) return null;
 
   const recipientLabel =

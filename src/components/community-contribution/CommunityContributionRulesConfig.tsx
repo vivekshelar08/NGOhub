@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
@@ -19,6 +19,8 @@ interface ServiceOption {
 interface CommunityContributionRulesConfigProps {
   projectId: string;
   projectTitle?: string;
+  /** Places from the project (district, centre, coverage areas). */
+  projectLocations: string[];
   services: ServiceOption[];
 }
 
@@ -28,30 +30,54 @@ type DraftRow = {
   partnerName: string;
 };
 
+function draftKey(location: string, serviceId: string) {
+  return `${location}::${serviceId}`;
+}
+
 export function CommunityContributionRulesConfig({
   projectId,
   projectTitle,
+  projectLocations,
   services,
 }: CommunityContributionRulesConfigProps) {
+  const [selectedLocation, setSelectedLocation] = useState("");
+  const [customLocation, setCustomLocation] = useState("");
   const [rules, setRules] = useState<CommunityContributionRuleDto[]>([]);
   const [drafts, setDrafts] = useState<Record<string, DraftRow>>({});
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
+  const activeLocation = useMemo(() => {
+    if (selectedLocation === "__custom__") return customLocation.trim();
+    return selectedLocation;
+  }, [selectedLocation, customLocation]);
+
+  useEffect(() => {
+    if (projectLocations.length > 0 && !selectedLocation) {
+      setSelectedLocation(projectLocations[0]);
+    }
+  }, [projectLocations, selectedLocation]);
+
   const load = useCallback(async () => {
+    if (!projectId || !activeLocation) {
+      setRules([]);
+      setDrafts({});
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await fetch(
-        `/api/community-contributions/rules?projectId=${encodeURIComponent(projectId)}`
-      );
+      const params = new URLSearchParams({ projectId, location: activeLocation });
+      const res = await fetch(`/api/community-contributions/rules?${params}`);
       const data = await res.json();
       const loaded: CommunityContributionRuleDto[] = data.rules ?? [];
       setRules(loaded);
       const next: Record<string, DraftRow> = {};
       for (const svc of services) {
-        const rule = loaded.find((r) => r.serviceId === svc.id);
-        next[svc.id] = {
+        const rule = loaded.find((r) => r.serviceId === svc.id && r.location === activeLocation);
+        const key = draftKey(activeLocation, svc.id);
+        next[key] = {
           amount: rule ? String(rule.amountPerBeneficiary) : "",
           recipientType: rule?.recipientType ?? "NGO",
           partnerName: rule?.partnerName ?? "",
@@ -61,14 +87,19 @@ export function CommunityContributionRulesConfig({
     } finally {
       setLoading(false);
     }
-  }, [projectId, services]);
+  }, [projectId, activeLocation, services]);
 
   useEffect(() => {
-    if (projectId && services.length > 0) void load();
-  }, [projectId, services, load]);
+    if (projectId && services.length > 0 && activeLocation) void load();
+  }, [projectId, services, activeLocation, load]);
 
   async function save(serviceId: string) {
-    const draft = drafts[serviceId];
+    const key = draftKey(activeLocation, serviceId);
+    const draft = drafts[key];
+    if (!activeLocation) {
+      setMessage("Select a project location first.");
+      return;
+    }
     if (!draft?.amount || Number(draft.amount) <= 0) {
       setMessage("Enter a positive amount per beneficiary.");
       return;
@@ -87,6 +118,7 @@ export function CommunityContributionRulesConfig({
         body: JSON.stringify({
           projectId,
           serviceId,
+          location: activeLocation,
           amountPerBeneficiary: Number(draft.amount),
           recipientType: draft.recipientType,
           partnerName: draft.partnerName.trim() || undefined,
@@ -94,7 +126,7 @@ export function CommunityContributionRulesConfig({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
-      setMessage(`Saved rate for ${data.rule.serviceName}.`);
+      setMessage(`Saved rate for ${data.rule.serviceName} at ${activeLocation}.`);
       await load();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to save");
@@ -107,7 +139,8 @@ export function CommunityContributionRulesConfig({
     return (
       <Card className="p-4">
         <p className="text-sm text-slate-500">
-          Select a project above to configure community contribution rates per service.
+          Select a project above — managers set community contribution rates here by project
+          location and service (not in milestone setup).
         </p>
       </Card>
     );
@@ -117,31 +150,70 @@ export function CommunityContributionRulesConfig({
     <Card>
       <CardTitle className="mb-1 text-base">Community contribution rates</CardTitle>
       <p className="mb-4 text-sm text-slate-500">
-        Set the per-beneficiary amount for each service on{" "}
-        <strong>{projectTitle ?? "this project"}</strong>. Staff will mark each entry as{" "}
+        Managers set per-beneficiary amounts for <strong>{projectTitle ?? "this project"}</strong>{" "}
+        by <strong>location</strong> and service. Staff mark each entry as{" "}
         <em>Collected</em> or <em>Pending</em> during data entry.
       </p>
 
-      {loading && (
+      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label className="text-xs">Project location</Label>
+          <select
+            className="input-brand mt-1 w-full"
+            value={selectedLocation}
+            onChange={(e) => setSelectedLocation(e.target.value)}
+          >
+            {projectLocations.length === 0 && (
+              <option value="__custom__">Enter location manually</option>
+            )}
+            {projectLocations.map((loc) => (
+              <option key={loc} value={loc}>
+                {loc}
+              </option>
+            ))}
+            <option value="__custom__">Other location…</option>
+          </select>
+        </div>
+        {selectedLocation === "__custom__" && (
+          <div>
+            <Label className="text-xs">Location name</Label>
+            <Input
+              className="mt-1"
+              placeholder="e.g. Ghatkopar centre, Ward 12"
+              value={customLocation}
+              onChange={(e) => setCustomLocation(e.target.value)}
+            />
+          </div>
+        )}
+      </div>
+
+      {!activeLocation && (
+        <p className="text-sm text-amber-700">Choose or enter a location to configure rates.</p>
+      )}
+
+      {loading && activeLocation && (
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading rates…
         </div>
       )}
 
-      {!loading && services.length === 0 && (
+      {!loading && activeLocation && services.length === 0 && (
         <p className="text-sm text-slate-500">Create services first, then set rates here.</p>
       )}
 
-      {!loading && services.length > 0 && (
+      {!loading && activeLocation && services.length > 0 && (
         <div className="space-y-4">
           {services.map((svc) => {
-            const draft = drafts[svc.id] ?? {
+            const key = draftKey(activeLocation, svc.id);
+            const draft = drafts[key] ?? {
               amount: "",
               recipientType: "NGO" as const,
               partnerName: "",
             };
-            const saved = rules.find((r) => r.serviceId === svc.id);
+            const saved = rules.find(
+              (r) => r.serviceId === svc.id && r.location === activeLocation
+            );
             return (
               <div
                 key={svc.id}
@@ -166,7 +238,7 @@ export function CommunityContributionRulesConfig({
                     onChange={(e) =>
                       setDrafts((prev) => ({
                         ...prev,
-                        [svc.id]: { ...draft, amount: e.target.value },
+                        [key]: { ...draft, amount: e.target.value },
                       }))
                     }
                   />
@@ -179,7 +251,7 @@ export function CommunityContributionRulesConfig({
                     onChange={(e) =>
                       setDrafts((prev) => ({
                         ...prev,
-                        [svc.id]: {
+                        [key]: {
                           ...draft,
                           recipientType: e.target.value as "NGO" | "PARTNER",
                         },
@@ -200,7 +272,7 @@ export function CommunityContributionRulesConfig({
                     onChange={(e) =>
                       setDrafts((prev) => ({
                         ...prev,
-                        [svc.id]: { ...draft, partnerName: e.target.value },
+                        [key]: { ...draft, partnerName: e.target.value },
                       }))
                     }
                   />
