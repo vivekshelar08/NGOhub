@@ -15,7 +15,10 @@ import { BeneficiaryCategory, BeneficiaryCohort } from "@/generated/prisma/enums
 import { CohortMultiSelect } from "@/components/beneficiaries/CohortMultiSelect";
 import { BENEFICIARY_CATEGORY_LABELS } from "@/lib/service-portal-utils";
 import { CommunityContributionFields } from "@/components/community-contribution/CommunityContributionFields";
-import { ContributionCollectionStatus } from "@/lib/community-contribution-shared";
+import {
+  CONTRIBUTION_COLLECTION_LABELS,
+  ContributionCollectionStatus,
+} from "@/lib/community-contribution-shared";
 
 interface PortalBeneficiary {
   id: string;
@@ -281,6 +284,9 @@ export function BeneficiaryCaptureSection({
                 <p className="text-xs text-slate-500">
                   📱 {ben.contact}
                   {ben.serviceName && ` · ${ben.serviceName}`}
+                  {ben.serviceId &&
+                    ben.contributionCollectionStatus &&
+                    ` · Contribution: ${CONTRIBUTION_COLLECTION_LABELS[ben.contributionCollectionStatus]}`}
                   {ben.category && ` · ${BENEFICIARY_CATEGORY_LABELS[ben.category as BeneficiaryCategory] ?? ben.category}`}
                   {ben.annualIncome != null && ` · ₹${ben.annualIncome.toLocaleString("en-IN")}/yr`}
                   {ben.familyMembers != null && ` · ${ben.familyMembers} members`}
@@ -556,7 +562,7 @@ export function BeneficiaryCaptureSection({
                   </p>
                 ) : null}
               </div>
-              {projectId && form.serviceId && (
+              {form.serviceId && (
                 <div className="sm:col-span-2">
                   <CommunityContributionFields
                     projectId={projectId}

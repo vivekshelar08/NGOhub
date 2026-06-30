@@ -8,8 +8,8 @@ import {
 export type ContributionCollectionStatus = CommunityContributionCollectionStatus;
 
 export const CONTRIBUTION_COLLECTION_LABELS: Record<ContributionCollectionStatus, string> = {
-  COLLECTED: "Collected",
-  PENDING: "Pending",
+  COLLECTED: "Paid",
+  PENDING: "Not paid",
 };
 
 export const CONTRIBUTION_RECIPIENT_LABELS: Record<CommunityContributionRecipientType, string> = {

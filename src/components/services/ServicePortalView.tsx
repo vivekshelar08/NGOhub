@@ -1076,9 +1076,9 @@ export function ServicePortalView({
               </div>
             )}
 
-            {form.projectId && form.serviceId && (
+            {form.serviceId && (
               <CommunityContributionFields
-                projectId={form.projectId}
+                projectId={form.projectId || selectedProjectId}
                 serviceId={form.serviceId}
                 location={form.location}
                 value={form.contributionCollectionStatus}
@@ -1616,7 +1616,7 @@ export function ServicePortalView({
                   Add Service
                 </Button>
               </div>
-              {(selectedBeneficiary.projectId || selectedProjectId) && addServiceId && (
+              {addServiceId && (
                 <CommunityContributionFields
                   projectId={selectedBeneficiary.projectId || selectedProjectId}
                   serviceId={addServiceId}

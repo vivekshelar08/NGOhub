@@ -83,12 +83,45 @@ export async function createContributionForDelivery(input: CreateContributionInp
   }
 
   const rule = await findContributionRule(input.projectId, input.serviceId, location);
-  if (!rule) return null;
+  const status = input.collectionStatus ?? "PENDING";
+
+  if (!rule) {
+    return prisma.communityContributionEntry.create({
+      data: {
+        projectId: input.projectId,
+        beneficiaryId: input.beneficiaryId,
+        serviceDeliveryId: input.serviceDeliveryId,
+        serviceId: input.serviceId,
+        amount: 0,
+        collectionStatus: status,
+        recipientType: "NGO",
+        partnerId: null,
+        partnerName: null,
+        collectedAt: status === "COLLECTED" ? new Date() : null,
+        enteredById: input.enteredById,
+      },
+    });
+  }
 
   const amount = decimalToNumber(rule.amountPerBeneficiary) ?? 0;
-  if (amount <= 0) return null;
+  if (amount <= 0) {
+    return prisma.communityContributionEntry.create({
+      data: {
+        projectId: input.projectId,
+        beneficiaryId: input.beneficiaryId,
+        serviceDeliveryId: input.serviceDeliveryId,
+        serviceId: input.serviceId,
+        amount: 0,
+        collectionStatus: status,
+        recipientType: rule.recipientType,
+        partnerId: rule.partnerId,
+        partnerName: rule.partnerName ?? rule.partner?.name ?? null,
+        collectedAt: status === "COLLECTED" ? new Date() : null,
+        enteredById: input.enteredById,
+      },
+    });
+  }
 
-  const status = input.collectionStatus ?? "PENDING";
   const partnerName = rule.partnerName ?? rule.partner?.name ?? null;
 
   return prisma.communityContributionEntry.create({
