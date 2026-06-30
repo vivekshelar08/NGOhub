@@ -28,6 +28,23 @@ export function formatContributionInr(amount: number): string {
   }).format(amount);
 }
 
+/** Parse API JSON safely — avoids "Unexpected end of JSON input" on empty error bodies. */
+export async function parseApiResponse(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  if (!text.trim()) {
+    throw new Error(
+      res.ok
+        ? "Empty response from server"
+        : `Server error (${res.status}). Database may need updating — run npx prisma db push on the host.`
+    );
+  }
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new Error(`Invalid server response (${res.status})`);
+  }
+}
+
 export interface CommunityContributionRuleDto {
   id: string;
   projectId: string;

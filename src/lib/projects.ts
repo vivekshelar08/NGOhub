@@ -1359,8 +1359,8 @@ export function computeCatalogAchievementTotals(setup: ProjectSetup): CatalogAch
 
   const catalogIds = new Set(catalog.map((c) => c.id));
   const achievedByCatalog = new Map<string, { activities: number; beneficiaries: number }>();
-  let uncataloguedTargets = { activities: 0, beneficiaries: 0 };
-  let uncataloguedAchieved = { activities: 0, beneficiaries: 0 };
+  const uncataloguedTargets = { activities: 0, beneficiaries: 0 };
+  const uncataloguedAchieved = { activities: 0, beneficiaries: 0 };
 
   for (const milestone of milestones) {
     for (const kpi of milestone.kpis) {

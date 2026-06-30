@@ -9,6 +9,7 @@ import {
   CONTRIBUTION_RECIPIENT_LABELS,
   CommunityContributionRuleDto,
   formatContributionInr,
+  parseApiResponse,
 } from "@/lib/community-contribution-shared";
 
 interface ServiceOption {
@@ -70,8 +71,10 @@ export function CommunityContributionRulesConfig({
     try {
       const params = new URLSearchParams({ projectId, location: activeLocation });
       const res = await fetch(`/api/community-contributions/rules?${params}`);
-      const data = await res.json();
-      const loaded: CommunityContributionRuleDto[] = data.rules ?? [];
+      const data = await parseApiResponse(res);
+      if (!res.ok) throw new Error(String(data.error ?? "Failed to load rates"));
+      const loaded: CommunityContributionRuleDto[] =
+        (data.rules as CommunityContributionRuleDto[] | undefined) ?? [];
       setRules(loaded);
       const next: Record<string, DraftRow> = {};
       for (const svc of services) {
@@ -84,6 +87,8 @@ export function CommunityContributionRulesConfig({
         };
       }
       setDrafts(next);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Failed to load rates");
     } finally {
       setLoading(false);
     }
@@ -124,9 +129,10 @@ export function CommunityContributionRulesConfig({
           partnerName: draft.partnerName.trim() || undefined,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to save");
-      setMessage(`Saved rate for ${data.rule.serviceName} at ${activeLocation}.`);
+      const data = await parseApiResponse(res);
+      if (!res.ok) throw new Error(String(data.error ?? "Failed to save"));
+      const rule = data.rule as CommunityContributionRuleDto | undefined;
+      setMessage(`Saved rate for ${rule?.serviceName ?? "service"} at ${activeLocation}.`);
       await load();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to save");
