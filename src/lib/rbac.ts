@@ -4,6 +4,7 @@ export type Permission =
   | "manage_users"
   | "system_settings"
   | "manage_projects"
+  | "manage_services"
   | "view_projects"
   | "manage_beneficiaries"
   | "approve_expenses"
@@ -42,6 +43,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "manage_users",
     "system_settings",
     "manage_projects",
+    "manage_services",
     "view_projects",
     "manage_beneficiaries",
     "approve_expenses",
@@ -59,6 +61,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ],
   MANAGER: [
     "manage_projects",
+    "manage_services",
     "view_projects",
     "manage_beneficiaries",
     "approve_expenses",
@@ -96,6 +99,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ],
   COORDINATOR: [
     "view_projects",
+    "manage_services",
     "manage_beneficiaries",
     "submit_expenses",
     "view_finance",

@@ -60,8 +60,34 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
   }
 
   const { id } = await params;
+  const service = await prisma.service.findUnique({
+    where: { id },
+    include: { _count: { select: { deliveries: true } } },
+  });
+
+  if (!service) {
+    return NextResponse.json({ error: "Service not found" }, { status: 404 });
+  }
+
+  if (service._count.deliveries > 0) {
+    await prisma.service.update({
+      where: { id },
+      data: { isActive: false },
+    });
+    return NextResponse.json({
+      ok: true,
+      deactivated: true,
+      message:
+        "Service has existing deliveries and was deactivated instead of deleted. Historical records are preserved.",
+    });
+  }
+
   await prisma.service.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    deactivated: false,
+    message: "Service deleted.",
+  });
 }
 
 export async function POST(request: Request, { params }: RouteParams) {

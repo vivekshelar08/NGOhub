@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Clock,
   FileSpreadsheet,
+  Pencil,
   Plus,
   Search,
   Settings,
@@ -270,6 +271,9 @@ export function ServicePortalView({
 
   const [newServiceName, setNewServiceName] = useState("");
   const [newServiceDesc, setNewServiceDesc] = useState("");
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [editServiceName, setEditServiceName] = useState("");
+  const [editServiceDesc, setEditServiceDesc] = useState("");
   const [newStepName, setNewStepName] = useState("");
   const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
   const [satisfactionPrompt, setSatisfactionPrompt] = useState<{
@@ -695,6 +699,96 @@ export function ServicePortalView({
       await loadServices();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add step");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  function startEditService(service: ServiceItem) {
+    setEditingServiceId(service.id);
+    setEditServiceName(service.name);
+    setEditServiceDesc(service.description ?? "");
+    setExpandedServiceId(service.id);
+  }
+
+  function cancelEditService() {
+    setEditingServiceId(null);
+    setEditServiceName("");
+    setEditServiceDesc("");
+  }
+
+  const handleUpdateService = async (serviceId: string) => {
+    if (!editServiceName.trim()) return;
+    setLoading(true);
+    clearMessages();
+    try {
+      const res = await fetch(`/api/services/${serviceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editServiceName.trim(),
+          description: editServiceDesc.trim() || undefined,
+          isActive: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to update service");
+
+      setSuccess(`Service "${data.service.name}" updated`);
+      cancelEditService();
+      await loadServices();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update service");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteService = async (service: ServiceItem) => {
+    const deliveryCount = service._count?.deliveries ?? 0;
+    const message =
+      deliveryCount > 0
+        ? `"${service.name}" has ${deliveryCount} delivery record(s). It will be deactivated (hidden from new enrollments) but history is kept. Continue?`
+        : `Permanently delete "${service.name}"? This cannot be undone.`;
+    if (!window.confirm(message)) return;
+
+    setLoading(true);
+    clearMessages();
+    try {
+      const res = await fetch(`/api/services/${service.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to delete service");
+
+      setSuccess(
+        data.message ??
+          (data.deactivated ? "Service deactivated" : "Service deleted")
+      );
+      if (editingServiceId === service.id) cancelEditService();
+      if (expandedServiceId === service.id) setExpandedServiceId(null);
+      await loadServices();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete service");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteStep = async (serviceId: string, stepId: string, stepName: string) => {
+    if (!window.confirm(`Remove step "${stepName}"?`)) return;
+
+    setLoading(true);
+    clearMessages();
+    try {
+      const res = await fetch(`/api/services/${serviceId}/steps/${stepId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to remove step");
+
+      setSuccess("Step removed");
+      await loadServices();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove step");
     } finally {
       setLoading(false);
     }
@@ -1335,41 +1429,123 @@ export function ServicePortalView({
 
           <div className="grid gap-4">
             {services.map((service) => (
-              <Card key={service.id}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900">{service.name}</h3>
-                    {service.description && (
-                      <p className="text-sm text-slate-600">{service.description}</p>
-                    )}
-                    <p className="mt-1 text-xs text-slate-500">
-                      {service._count?.deliveries ?? 0} deliveries · {service.steps.length} steps
-                    </p>
+              <Card key={service.id} className={!service.isActive ? "opacity-80" : undefined}>
+                {editingServiceId === service.id ? (
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-slate-700">Edit service</h3>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <Label>Service name *</Label>
+                        <Input
+                          className="mt-1"
+                          value={editServiceName}
+                          onChange={(e) => setEditServiceName(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label>Description</Label>
+                        <Input
+                          className="mt-1"
+                          value={editServiceDesc}
+                          onChange={(e) => setEditServiceDesc(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={loading || !editServiceName.trim()}
+                        onClick={() => void handleUpdateService(service.id)}
+                      >
+                        Save changes
+                      </Button>
+                      <Button type="button" size="sm" variant="secondary" onClick={cancelEditService}>
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setExpandedServiceId(expandedServiceId === service.id ? null : service.id)
-                    }
-                    className="text-sm text-brand-teal hover:underline"
-                  >
-                    {expandedServiceId === service.id ? "Hide steps" : "Manage steps"}
-                  </button>
-                </div>
+                ) : (
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-lg font-semibold text-slate-900">{service.name}</h3>
+                        {!service.isActive && (
+                          <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+                      {service.description && (
+                        <p className="text-sm text-slate-600">{service.description}</p>
+                      )}
+                      <p className="mt-1 text-xs text-slate-500">
+                        {service._count?.deliveries ?? 0} deliveries · {service.steps.length} steps
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="gap-1.5"
+                        onClick={() => startEditService(service)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="gap-1.5 text-red-700 hover:text-red-800"
+                        disabled={loading}
+                        onClick={() => void handleDeleteService(service)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        {service._count?.deliveries ? "Deactivate" : "Delete"}
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedServiceId(expandedServiceId === service.id ? null : service.id)
+                        }
+                        className="text-sm text-brand-teal hover:underline"
+                      >
+                        {expandedServiceId === service.id ? "Hide steps" : "Manage steps"}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-                {expandedServiceId === service.id && (
+                {expandedServiceId === service.id && editingServiceId !== service.id && (
                   <div className="mt-4 border-t border-slate-100 pt-4">
                     <h4 className="mb-2 text-sm font-medium text-slate-700">Delivery Steps</h4>
                     <ol className="mb-3 space-y-1">
                       {service.steps.map((step) => (
-                        <li key={step.id} className="flex items-center gap-2 text-sm text-slate-700">
-                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-mist text-xs font-medium text-brand-teal-dark">
-                            {step.stepOrder}
-                          </span>
-                          {step.name}
-                          {step.description && (
-                            <span className="text-slate-500">— {step.description}</span>
-                          )}
+                        <li
+                          key={step.id}
+                          className="flex items-center justify-between gap-2 text-sm text-slate-700"
+                        >
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-mist text-xs font-medium text-brand-teal-dark">
+                              {step.stepOrder}
+                            </span>
+                            <span className="truncate">
+                              {step.name}
+                              {step.description && (
+                                <span className="text-slate-500"> — {step.description}</span>
+                              )}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className="shrink-0 rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                            aria-label={`Remove step ${step.name}`}
+                            onClick={() => void handleDeleteStep(service.id, step.id, step.name)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </li>
                       ))}
                       {service.steps.length === 0 && (

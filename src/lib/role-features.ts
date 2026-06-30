@@ -431,8 +431,8 @@ export const FEATURES: FeatureDefinition[] = [
     id: "services.manage",
     moduleId: "beneficiaries",
     label: "Manage services",
-    description: "Create services and configure delivery steps",
-    permission: "manage_projects",
+    description: "Create, update, and remove services and delivery steps",
+    permission: "manage_services",
     status: "live",
   },
 
