@@ -4,6 +4,7 @@ import type { ActivityTask } from "@/lib/activities";
 import { getCurrentUser } from "@/lib/auth";
 import { hasPermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
+import { isPrismaSchemaMismatch, schemaMismatchMessage } from "@/lib/api-db-safe";
 
 function rowToTask(row: {
   id: string;
@@ -48,13 +49,20 @@ export async function GET(request: Request) {
     where = { OR: or };
   }
 
-  const rows = await prisma.fieldActivityTask.findMany({
-    where,
-    orderBy: { updatedAt: "desc" },
-  });
+  try {
+    const rows = await prisma.fieldActivityTask.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+    });
 
-  const tasks = rows.map(rowToTask).filter((t): t is ActivityTask => t !== null);
-  return NextResponse.json({ tasks });
+    const tasks = rows.map(rowToTask).filter((t): t is ActivityTask => t !== null);
+    return NextResponse.json({ tasks });
+  } catch (error) {
+    if (isPrismaSchemaMismatch(error)) {
+      return NextResponse.json({ tasks: [], schemaPending: true });
+    }
+    throw error;
+  }
 }
 
 export async function PUT(request: Request) {
@@ -80,7 +88,8 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await prisma.fieldActivityTask.upsert({
+  try {
+    await prisma.fieldActivityTask.upsert({
     where: { id: task.id },
     create: {
       id: task.id,
@@ -99,9 +108,15 @@ export async function PUT(request: Request) {
       status: task.status,
       payload: task as unknown as Prisma.InputJsonValue,
     },
-  });
+    });
 
-  return NextResponse.json({ ok: true, task });
+    return NextResponse.json({ ok: true, task });
+  } catch (error) {
+    if (isPrismaSchemaMismatch(error)) {
+      return NextResponse.json({ error: schemaMismatchMessage(), schemaPending: true }, { status: 503 });
+    }
+    throw error;
+  }
 }
 
 export async function DELETE(request: Request) {

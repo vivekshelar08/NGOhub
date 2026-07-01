@@ -1,4 +1,4 @@
-const CACHE_VERSION = "ngo-hub-pwa-v1";
+const CACHE_VERSION = "ngo-hub-pwa-v2";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const OFFLINE_URL = "/offline";
 

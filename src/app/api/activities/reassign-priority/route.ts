@@ -3,6 +3,7 @@ import type { ActivityTask } from "@/lib/activities";
 import { getCurrentUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/role-features";
 import { prisma } from "@/lib/prisma";
+import { isPrismaSchemaMismatch } from "@/lib/api-db-safe";
 import { todayDateOnly } from "@/lib/hr-utils";
 import { isEmergencyLeave } from "@/lib/leave-shared";
 import { LeaveApplicationStatus } from "@/generated/prisma/enums";
@@ -20,7 +21,8 @@ export async function GET() {
 
   const today = todayDateOnly();
 
-  const emergencyLeaves = await prisma.leaveApplication.findMany({
+  try {
+    const emergencyLeaves = await prisma.leaveApplication.findMany({
     where: {
       status: LeaveApplicationStatus.APPROVED,
       endDate: { gte: today },
@@ -76,4 +78,10 @@ export async function GET() {
   });
 
   return NextResponse.json({ tasks, leaveCount: emergencyLeaves.length });
+  } catch (error) {
+    if (isPrismaSchemaMismatch(error)) {
+      return NextResponse.json({ tasks: [], leaveCount: 0, schemaPending: true });
+    }
+    throw error;
+  }
 }

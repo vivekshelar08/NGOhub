@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Loader2, UserRoundCog } from "lucide-react";
+import { AlertTriangle, UserRoundCog } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { ActivityTask } from "@/lib/activities";
@@ -29,15 +29,19 @@ export function PriorityReassignPanel({ onReassign, className }: PriorityReassig
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    setLoading(true);
     try {
-      const res = await fetch("/api/activities/reassign-priority");
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 8000);
+      const res = await fetch("/api/activities/reassign-priority", { signal: controller.signal });
+      window.clearTimeout(timeout);
       if (res.ok) {
         const data = await res.json();
         setItems(data.tasks ?? []);
       } else {
         setItems([]);
       }
+    } catch {
+      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -47,18 +51,7 @@ export function PriorityReassignPanel({ onReassign, className }: PriorityReassig
     void load();
   }, [load]);
 
-  if (loading) {
-    return (
-      <Card className={className}>
-        <div className="flex items-center gap-2 p-4 text-sm text-slate-500">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Checking emergency leave reassignments…
-        </div>
-      </Card>
-    );
-  }
-
-  if (items.length === 0) return null;
+  if (loading || items.length === 0) return null;
 
   return (
     <Card className={className}>

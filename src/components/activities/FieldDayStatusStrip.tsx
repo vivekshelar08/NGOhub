@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Clock, Loader2, MapPin, RefreshCw } from "lucide-react";
+import { Clock, MapPin, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatTimeKolkata, localDateKey } from "@/lib/hr-utils";
 
@@ -22,13 +22,17 @@ export function FieldDayStatusStrip({ className }: { className?: string }) {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    setLoading(true);
     try {
-      const res = await fetch("/api/hr/attendance/day-summary");
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 8000);
+      const res = await fetch("/api/hr/attendance/day-summary", { signal: controller.signal });
+      window.clearTimeout(timeout);
       if (res.ok) {
         const data = await res.json();
         setSummary(data);
       }
+    } catch {
+      /* non-blocking — strip hidden on failure */
     } finally {
       setLoading(false);
     }
@@ -41,16 +45,7 @@ export function FieldDayStatusStrip({ className }: { className?: string }) {
     return () => window.removeEventListener("activities-updated", onUpdate);
   }, [load]);
 
-  if (loading && !summary) {
-    return (
-      <div className={cn("flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500", className)}>
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading today&apos;s status…
-      </div>
-    );
-  }
-
-  if (!summary) return null;
+  if (loading || !summary) return null;
 
   if (summary.onLeave) {
     return (

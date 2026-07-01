@@ -127,6 +127,12 @@ export function TaskExecutionPanel({
       });
       const data = await res.json();
       if (!res.ok) {
+        if (data.code === "SCHEMA_PENDING") {
+          startTask(task.id);
+          onStartFocus?.();
+          onUpdate();
+          return;
+        }
         if (data.code === "PUNCH_REQUIRED") {
           setError("Punch in from HR / dashboard before starting field work.");
         } else {

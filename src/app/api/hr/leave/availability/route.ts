@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isPrismaSchemaMismatch } from "@/lib/api-db-safe";
 import { getCurrentUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/role-features";
 import { parseDateOnly } from "@/lib/hr-utils";
@@ -24,7 +25,14 @@ export async function GET(request: Request) {
   }
 
   const date = parseDateOnly(dateParam);
-  const onLeave = await getUsersOnLeaveForDate(prisma, date);
 
-  return NextResponse.json({ date: dateParam, onLeave });
+  try {
+    const onLeave = await getUsersOnLeaveForDate(prisma, date);
+    return NextResponse.json({ date: dateParam, onLeave });
+  } catch (error) {
+    if (isPrismaSchemaMismatch(error)) {
+      return NextResponse.json({ date: dateParam, onLeave: [], schemaPending: true });
+    }
+    throw error;
+  }
 }

@@ -9,6 +9,7 @@ import {
   performPunchIn,
 } from "@/lib/attendance-punch-server";
 import { isFieldWorkType, type PunchLocationType } from "@/lib/field-work";
+import { isPrismaSchemaMismatch, schemaMismatchMessage } from "@/lib/api-db-safe";
 
 function rowToTask(row: { payload: unknown }): ActivityTask | null {
   if (!row.payload || typeof row.payload !== "object" || Array.isArray(row.payload)) return null;
@@ -30,7 +31,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "taskId is required" }, { status: 400 });
   }
 
-  const row = await prisma.fieldActivityTask.findUnique({ where: { id: taskId } });
+  try {
+    const row = await prisma.fieldActivityTask.findUnique({ where: { id: taskId } });
   if (!row) {
     return NextResponse.json({ error: "Task not found on server" }, { status: 404 });
   }
@@ -102,4 +104,13 @@ export async function POST(request: Request) {
     punchedIn: Boolean(attendanceRecord?.punchIn),
     autoPunched: !hadPunchIn && Boolean(attendanceRecord?.punchIn),
   });
+  } catch (error) {
+    if (isPrismaSchemaMismatch(error)) {
+      return NextResponse.json(
+        { error: schemaMismatchMessage(), code: "SCHEMA_PENDING", schemaPending: true },
+        { status: 503 }
+      );
+    }
+    throw error;
+  }
 }

@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { hasPermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { haversineKm, isFieldWorkType } from "@/lib/field-work";
+import { isPrismaSchemaMismatch } from "@/lib/api-db-safe";
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -20,7 +21,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "taskId is required" }, { status: 400 });
   }
 
-  const visit = await prisma.fieldVisitLog.findFirst({
+  try {
+    const visit = await prisma.fieldVisitLog.findFirst({
     where: { taskId, userId: user.id, completedAt: null },
     orderBy: { startedAt: "desc" },
   });
@@ -79,4 +81,10 @@ export async function POST(request: Request) {
           }
         : null,
   });
+  } catch (error) {
+    if (isPrismaSchemaMismatch(error)) {
+      return NextResponse.json({ ok: true, schemaPending: true });
+    }
+    throw error;
+  }
 }
