@@ -17,10 +17,13 @@ import {
 } from "@/lib/ai-report-quota";
 import {
   buildClassicTodayReportFromTasks,
+  appendContributionTallyToReport,
   getTodayReportProviderLabel,
   TodayActivityReportMode,
   TodayActivityReportResult,
 } from "@/lib/today-activity-report";
+import { localDateKey } from "@/lib/hr-utils";
+import type { DailyContributionSummary } from "@/lib/community-contribution-shared";
 import {
   classicTodayReportInstant,
   fetchTodayActivityReportWithFallback,
@@ -62,6 +65,30 @@ export function TodaysActivityReportModal({
     );
   }
 
+  async function fetchContributionSummary(): Promise<DailyContributionSummary | null> {
+    try {
+      const params = new URLSearchParams({ date: localDateKey(), mine: "1" });
+      const res = await fetch(`/api/community-contributions/summary?${params}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data.summary as DailyContributionSummary | undefined) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  function withContributionTally(
+    result: TodayActivityReportResult,
+    mode: TodayActivityReportMode,
+    summary: DailyContributionSummary | null
+  ): TodayActivityReportResult {
+    if (mode !== "daily") return result;
+    return {
+      ...result,
+      message: appendContributionTallyToReport(result.message, summary),
+    };
+  }
+
   useEffect(() => {
     const tasks = resolveTasks();
     setAiAttemptsLeft(getRemainingAiGenerations("field-today", userId));
@@ -75,14 +102,20 @@ export function TodaysActivityReportModal({
     const fp = fingerprint(tasks, mode);
     const cached = getCachedAiReport<TodayActivityReportResult>("field-today", fp);
 
-    if (cached && cached.provider !== "template") {
-      setReport(cached);
-      setNotice("Showing saved AI report (no new generation).");
-      return;
-    }
+    void (async () => {
+      const contributionSummary = mode === "daily" ? await fetchContributionSummary() : null;
 
-    setReport(classicTodayReportInstant(tasks, userName, mode));
-    setNotice("");
+      if (cached && cached.provider !== "template") {
+        setReport(withContributionTally(cached, mode, contributionSummary));
+        setNotice("Showing saved AI report (no new generation).");
+        return;
+      }
+
+      setReport(
+        withContributionTally(classicTodayReportInstant(tasks, userName, mode), mode, contributionSummary)
+      );
+      setNotice("");
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -91,7 +124,8 @@ export function TodaysActivityReportModal({
     const cached = getCachedAiReport<TodayActivityReportResult>("field-today", fp);
 
     if (cached && cached.provider !== "template") {
-      setReport(cached);
+      const contributionSummary = mode === "daily" ? await fetchContributionSummary() : null;
+      setReport(withContributionTally(cached, mode, contributionSummary));
       setNotice("Showing saved AI report (no new generation).");
       return;
     }
@@ -103,12 +137,13 @@ export function TodaysActivityReportModal({
 
     setLoadingAi(true);
     try {
+      const contributionSummary = mode === "daily" ? await fetchContributionSummary() : null;
       const { report: next, notice: info } = await fetchTodayActivityReportWithFallback(
         tasks,
         userName,
         mode
       );
-      setReport(next);
+      setReport(withContributionTally(next, mode, contributionSummary));
       setNotice(info ?? "");
 
       if (next.provider !== "template") {
@@ -126,11 +161,17 @@ export function TodaysActivityReportModal({
     }
   }
 
-  function useClassicOnly() {
+  async function useClassicOnly() {
     const tasks = resolveTasks();
     if (tasks.length === 0) return;
+    const mode = resolveMode(tasks);
+    const contributionSummary = mode === "daily" ? await fetchContributionSummary() : null;
     setReport(
-      buildClassicTodayReportFromTasks(tasks, userName, resolveMode(tasks), DEFAULT_ORG_SETTINGS.orgName)
+      withContributionTally(
+        buildClassicTodayReportFromTasks(tasks, userName, mode, DEFAULT_ORG_SETTINGS.orgName),
+        mode,
+        contributionSummary
+      )
     );
     setNotice("Using classic WhatsApp report (no AI).");
     setLoadingAi(false);

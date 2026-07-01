@@ -98,13 +98,19 @@ export function ActivitiesView({
   useEffect(() => {
     refresh();
     import("@/lib/activities").then(({ ensureActivityCodes }) => ensureActivityCodes());
+    void import("@/lib/activity-task-sync").then(
+      ({ syncActivityTasksFromServer, ensureLocalTasksUploaded }) =>
+        ensureLocalTasksUploaded()
+          .then(() => syncActivityTasksFromServer(userId, userRole, canViewAll))
+          .then(() => refresh())
+    );
     window.addEventListener("activities-updated", refresh);
     window.addEventListener("projects-updated", refresh);
     return () => {
       window.removeEventListener("activities-updated", refresh);
       window.removeEventListener("projects-updated", refresh);
     };
-  }, [refresh]);
+  }, [refresh, userId, userRole, canViewAll]);
 
   function openAssignFromRequest(request: {
     id: string;

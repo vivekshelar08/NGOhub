@@ -894,6 +894,25 @@ model ActivityRequest {
   @@index([projectId, legacyMilestoneId])
 }
 
+/** Field activity tasks — synced across devices (replaces browser-only storage). */
+model FieldActivityTask {
+  id               String   @id
+  assignedToUserId String
+  assignedByUserId String
+  projectId        String
+  scheduledDate    String?
+  status           String
+  payload          Json
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([assignedToUserId])
+  @@index([assignedByUserId])
+  @@index([projectId])
+  @@index([scheduledDate])
+  @@index([status])
+}
+
 model PublicHoliday {
   id      String      @id @default(uuid())
   date    DateTime    @db.Date

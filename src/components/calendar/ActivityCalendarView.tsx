@@ -32,6 +32,8 @@ import {
   TASK_STATUS_CALENDAR_STYLES,
   TASK_STATUS_LABELS,
   tasksInDateRange,
+  activityRequestToCalendarEvent,
+  activityRequestInDateRange,
   WORK_TYPE_LABELS as FIELD_WORK_TYPE_LABELS,
 } from "@/lib/calendar-utils";
 import { localDateKey, formatDateKey } from "@/lib/hr-utils";
@@ -187,6 +189,15 @@ export function ActivityCalendarView({
   }, []);
 
   useEffect(() => {
+    void import("@/lib/activity-task-sync").then(
+      ({ syncActivityTasksFromServer, ensureLocalTasksUploaded }) =>
+        ensureLocalTasksUploaded()
+          .then(() => syncActivityTasksFromServer(userId, userRole, canViewAll))
+          .then(() => setLocalTasksVersion((v) => v + 1))
+    );
+  }, [userId, userRole, canViewAll]);
+
+  useEffect(() => {
     const refresh = () => setLocalTasksVersion((v) => v + 1);
     window.addEventListener("activities-updated", refresh);
     window.addEventListener("projects-updated", refresh);
@@ -205,7 +216,7 @@ export function ActivityCalendarView({
       canApprove
         ? fetch("/api/calendar/requests?status=PENDING&all=1")
         : Promise.resolve(null),
-      canRequest && !canApprove
+      canRequest
         ? fetch("/api/calendar/requests?status=PENDING")
         : Promise.resolve(null),
     ]);
@@ -221,6 +232,8 @@ export function ActivityCalendarView({
     if (pendingRes?.ok) {
       const data = await pendingRes.json();
       setPendingRequests(data.requests ?? []);
+    } else {
+      setPendingRequests([]);
     }
 
     if (myPendingRes?.ok) {
@@ -245,13 +258,30 @@ export function ActivityCalendarView({
     return tasksInDateRange(visible, monthRange.from, monthRange.to, userNames);
   }, [localTasksVersion, monthRange.from, monthRange.to, userNames, userId, userRole, canViewAll]);
 
+  const pendingRequestEvents = useMemo(() => {
+    const seen = new Set<string>();
+    const merged = [...pendingRequests, ...myPendingRequests].filter((req) => {
+      if (seen.has(req.id)) return false;
+      seen.add(req.id);
+      return activityRequestInDateRange(req, monthRange.from, monthRange.to);
+    });
+    return merged.map((req) =>
+      activityRequestToCalendarEvent({
+        ...req,
+        requestedByName: req.requestedByName,
+        status: "PENDING",
+      })
+    );
+  }, [pendingRequests, myPendingRequests, monthRange.from, monthRange.to]);
+
   const events = useMemo(() => {
     const merged = [
       ...taskEvents,
       ...apiEvents.filter((e) => e.kind !== "request" || e.status === "APPROVED"),
+      ...pendingRequestEvents,
     ];
     return enrichEvents(merged, userId);
-  }, [taskEvents, apiEvents, userId]);
+  }, [taskEvents, apiEvents, pendingRequestEvents, userId]);
 
   const eventsByDate = useMemo(() => groupEventsByDate(events), [events]);
 
@@ -651,81 +681,80 @@ export function ActivityCalendarView({
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
-              <Button variant="secondary" size="sm" onClick={goToToday}>
-                Today
-              </Button>
+              <div className="flex items-center gap-2">
+                {loading && (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Syncing…
+                  </span>
+                )}
+                <Button variant="secondary" size="sm" onClick={goToToday}>
+                  Today
+                </Button>
+              </div>
             </div>
 
-            {loading ? (
-              <div className="flex items-center justify-center py-24 text-slate-400">
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Loading calendar…
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
-                  {WEEKDAYS.map((day) => (
-                    <div key={day} className="px-2 py-2 text-center text-xs font-semibold uppercase text-slate-500">
-                      {day}
-                    </div>
-                  ))}
+            <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
+              {WEEKDAYS.map((day) => (
+                <div key={day} className="px-2 py-2 text-center text-xs font-semibold uppercase text-slate-500">
+                  {day}
                 </div>
-                <div className="grid grid-cols-7">
-                  {calendarCells.map((cell, index) => {
-                    if (!cell.date) {
-                      return (
-                        <div
-                          key={`empty-${index}`}
-                          className="min-h-[110px] border-b border-r border-slate-100 bg-slate-50/40"
-                        />
-                      );
-                    }
+              ))}
+            </div>
+            <div className="grid grid-cols-7">
+              {calendarCells.map((cell, index) => {
+                if (!cell.date) {
+                  return (
+                    <div
+                      key={`empty-${index}`}
+                      className="min-h-[110px] border-b border-r border-slate-100 bg-slate-50/40"
+                    />
+                  );
+                }
 
-                    const dayEvents = sortDayEvents(eventsByDate.get(cell.date) ?? []);
-                    const activityDayEvents = dayEvents.filter((e) => e.kind === "task" || e.kind === "request");
-                    const isSelected = cell.date === selectedDate;
-                    const isToday = cell.date === todayKey;
-                    const hasHoliday = dayEvents.some((e) => e.kind === "holiday");
+                const dayEvents = sortDayEvents(eventsByDate.get(cell.date) ?? []);
+                const activityDayEvents = dayEvents.filter((e) => e.kind === "task" || e.kind === "request");
+                const isSelected = cell.date === selectedDate;
+                const isToday = cell.date === todayKey;
+                const hasHoliday = dayEvents.some((e) => e.kind === "holiday");
 
-                    return (
-                      <button
-                        key={cell.date}
-                        type="button"
-                        onClick={() => setSelectedDate(cell.date!)}
-                        className={cn(
-                          "flex min-h-[110px] flex-col border-b border-r border-slate-100 p-1.5 text-left transition-colors hover:bg-brand-mist/50",
-                          isSelected && "bg-brand-mist ring-1 ring-inset ring-brand-teal/30",
-                          hasHoliday && !isSelected && "bg-amber-50/30"
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold",
-                            isToday && "bg-brand-red text-white",
-                            !isToday && "text-slate-700"
-                          )}
-                        >
-                          {cell.day}
+                return (
+                  <button
+                    key={cell.date}
+                    type="button"
+                    onClick={() => setSelectedDate(cell.date!)}
+                    className={cn(
+                      "flex min-h-[110px] flex-col border-b border-r border-slate-100 p-1.5 text-left transition-colors hover:bg-brand-mist/50",
+                      isSelected && "bg-brand-mist ring-1 ring-inset ring-brand-teal/30",
+                      hasHoliday && !isSelected && "bg-amber-50/30"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold",
+                        isToday && "bg-brand-red text-white",
+                        !isToday && "text-slate-700"
+                      )}
+                    >
+                      {cell.day}
+                    </span>
+                    <div className="mt-1 flex flex-1 flex-col gap-0.5 overflow-hidden">
+                      {activityDayEvents.slice(0, 3).map((event) => renderEventChip(event, true))}
+                      {activityDayEvents.length > 3 && (
+                        <span className="text-[10px] text-slate-400">
+                          +{activityDayEvents.length - 3} more
                         </span>
-                        <div className="mt-1 flex flex-1 flex-col gap-0.5 overflow-hidden">
-                          {activityDayEvents.slice(0, 3).map((event) => renderEventChip(event, true))}
-                          {activityDayEvents.length > 3 && (
-                            <span className="text-[10px] text-slate-400">
-                              +{activityDayEvents.length - 3} more
-                            </span>
-                          )}
-                          {activityDayEvents.length === 0 && dayEvents.length > 0 && (
-                            <span className="text-[10px] text-amber-600 truncate">
-                              {dayEvents.find((e) => e.kind === "holiday")?.title}
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
+                      )}
+                      {activityDayEvents.length === 0 && dayEvents.length > 0 && (
+                        <span className="text-[10px] text-amber-600 truncate">
+                          {dayEvents.find((e) => e.kind === "holiday")?.title}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </Card>
 
           <Card>
@@ -904,7 +933,7 @@ export function ActivityCalendarView({
             </Card>
           )}
 
-          {canRequest && !canApprove && myPendingRequests.length > 0 && (
+          {canRequest && myPendingRequests.length > 0 && (
             <Card>
               <CardTitle className="text-base">Your pending activity requests</CardTitle>
               <p className="mt-1 text-sm text-slate-500">

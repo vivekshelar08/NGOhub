@@ -10,10 +10,16 @@ import {
   getGenderCounts,
   getServiceWiseCounts,
   getUniqueLocations,
+  getContributionCounts,
+  formatContributionCountsLine,
 } from "@/lib/activity-share";
 import { callAiEngine, resolveAiEngine, type AiProvider } from "@/lib/ai-engine";
 import { formatDateKey, localDateKey } from "@/lib/hr-utils";
 import { DEFAULT_ORG_SETTINGS } from "@/lib/orgSettings";
+import {
+  DailyContributionSummary,
+  formatDailyContributionReportText,
+} from "@/lib/community-contribution-shared";
 
 export type TodayActivityReportMode = "single" | "daily";
 
@@ -43,6 +49,7 @@ export interface TodayActivityTaskSummary {
   }>;
   hasGpsEvidence: boolean;
   photoCount: number;
+  contributions: { paid: number; notPaid: number };
 }
 
 export interface TodayActivityReportRequest {
@@ -126,7 +133,16 @@ export function serializeTaskForReport(task: ActivityTask): TodayActivityTaskSum
     })),
     hasGpsEvidence: task.evidenceLatitude != null && task.evidenceLongitude != null,
     photoCount: task.photoAttachments?.length ?? 0,
+    contributions: getContributionCounts(beneficiaries),
   };
+}
+
+export function appendContributionTallyToReport(
+  message: string,
+  summary: DailyContributionSummary | null
+): string {
+  if (!summary || summary.totalEntries === 0) return message;
+  return `${message}\n\n${formatDailyContributionReportText(summary)}`;
 }
 
 export function buildTemplateFromSummaries(request: TodayActivityReportRequest): string {
@@ -140,6 +156,7 @@ export function buildTemplateFromSummaries(request: TodayActivityReportRequest):
       t.gender.male + t.gender.female + t.gender.other > 0
         ? `\n👥 Boys: ${t.gender.male} · Girls: ${t.gender.female}${t.gender.other ? ` · Other: ${t.gender.other}` : ""}`
         : "";
+    const contributionLine = formatContributionCountsLine(t.contributions);
     const place = t.locations[0] ?? (t.hasGpsEvidence ? "GPS verified" : "On field");
 
     return [
@@ -156,6 +173,7 @@ export function buildTemplateFromSummaries(request: TodayActivityReportRequest):
       t.beneficiaryCount > 0 ? `👨‍👩‍👧 Total beneficiaries: *${t.beneficiaryCount}*` : null,
       services ? `🩺 Service-wise: ${services}` : null,
       genderLine.trim() || null,
+      contributionLine,
       `📍 Location: ${place}`,
       t.notes ? `\n📝 ${t.notes}` : null,
       ``,
@@ -166,6 +184,14 @@ export function buildTemplateFromSummaries(request: TodayActivityReportRequest):
   }
 
   const totalBeneficiaries = request.tasks.reduce((s, t) => s + t.beneficiaryCount, 0);
+  const dayContributions = request.tasks.reduce(
+    (acc, t) => ({
+      paid: acc.paid + t.contributions.paid,
+      notPaid: acc.notPaid + t.contributions.notPaid,
+    }),
+    { paid: 0, notPaid: 0 }
+  );
+  const dayContributionLine = formatContributionCountsLine(dayContributions);
   const header = [
     `📋 *${orgName} — Today's field work*`,
     ``,
@@ -173,6 +199,7 @@ export function buildTemplateFromSummaries(request: TodayActivityReportRequest):
     `📅 ${dateLabel}`,
     `✅ ${request.tasks.length} activit${request.tasks.length === 1 ? "y" : "ies"} completed`,
     totalBeneficiaries > 0 ? `👨‍👩‍👧 Total beneficiaries reached: *${totalBeneficiaries}*` : null,
+    dayContributionLine,
     ``,
   ].filter(Boolean);
 
@@ -183,12 +210,14 @@ export function buildTemplateFromSummaries(request: TodayActivityReportRequest):
       task.gender.male + task.gender.female + task.gender.other > 0
         ? ` | Boys ${task.gender.male}, Girls ${task.gender.female}`
         : "";
+    const contributionBit = formatContributionCountsLine(task.contributions);
 
     return [
       `*${index + 1}. ${task.title}*`,
       task.projectTitle,
       `${task.workTypeLabel}${task.beneficiaryCount > 0 ? ` · ${task.beneficiaryCount} people${genderBit}` : ""}`,
       services ? `Services: ${services}` : null,
+      contributionBit,
       `📍 ${place}`,
       task.notes ? `Note: ${task.notes}` : null,
       ``,

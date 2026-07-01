@@ -334,11 +334,21 @@ export function upsertActivityTask(task: ActivityTask): ActivityTask {
       ? tasks.map((t, i) => (i === index ? normalized : t))
       : [...tasks, normalized];
   saveActivityTasks(next);
+  if (typeof window !== "undefined") {
+    void import("@/lib/activity-task-sync").then(({ pushActivityTaskToServer }) =>
+      pushActivityTaskToServer(normalized).catch(() => {})
+    );
+  }
   return normalized;
 }
 
 export function deleteActivityTask(id: string) {
   saveActivityTasks(loadActivityTasks().filter((t) => t.id !== id));
+  if (typeof window !== "undefined") {
+    void import("@/lib/activity-task-sync").then(({ deleteActivityTaskOnServer }) =>
+      deleteActivityTaskOnServer(id).catch(() => {})
+    );
+  }
 }
 
 export function createTaskId(): string {

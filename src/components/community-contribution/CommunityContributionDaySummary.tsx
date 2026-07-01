@@ -5,9 +5,9 @@ import { Copy, Loader2, Receipt, Download } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import {
-  CONTRIBUTION_RECIPIENT_LABELS,
   DailyContributionSummary,
   formatContributionInr,
+  formatDailyContributionReportText,
 } from "@/lib/community-contribution-shared";
 import { localDateKey } from "@/lib/hr-utils";
 
@@ -16,41 +16,6 @@ interface CommunityContributionDaySummaryProps {
   /** When true, only entries recorded by the current user today. */
   mineOnly?: boolean;
   className?: string;
-}
-
-function buildReportText(summary: DailyContributionSummary, projectTitle?: string): string {
-  const lines = [
-    `Community contribution tally — ${summary.date}`,
-    projectTitle ? `Project: ${projectTitle}` : "",
-    "",
-    `Collected: ${summary.collectedCount} entries · ${formatContributionInr(summary.collectedAmount)}`,
-    `Pending: ${summary.pendingCount} entries · ${formatContributionInr(summary.pendingAmount)}`,
-    `Total registered today: ${summary.totalEntries}`,
-  ].filter(Boolean);
-
-  if (summary.byService.length > 0) {
-    lines.push("", "By service:");
-    for (const row of summary.byService) {
-      lines.push(
-        `• ${row.serviceName}: collected ${formatContributionInr(row.collectedAmount)} (${row.collectedCount}), pending ${formatContributionInr(row.pendingAmount)} (${row.pendingCount})`
-      );
-    }
-  }
-
-  if (summary.byRecipient.length > 0) {
-    lines.push("", "By recipient:");
-    for (const row of summary.byRecipient) {
-      const label =
-        row.recipientType === "PARTNER"
-          ? row.partnerName || CONTRIBUTION_RECIPIENT_LABELS.PARTNER
-          : CONTRIBUTION_RECIPIENT_LABELS.NGO;
-      lines.push(
-        `• ${label}: collected ${formatContributionInr(row.collectedAmount)}, pending ${formatContributionInr(row.pendingAmount)}`
-      );
-    }
-  }
-
-  return lines.join("\n");
 }
 
 export function CommunityContributionDaySummary({
@@ -84,7 +49,7 @@ export function CommunityContributionDaySummary({
 
   async function handleCopy() {
     if (!summary) return;
-    await navigator.clipboard.writeText(buildReportText(summary));
+    await navigator.clipboard.writeText(formatDailyContributionReportText(summary));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }

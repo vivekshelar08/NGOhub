@@ -45,6 +45,44 @@ export async function parseApiResponse(res: Response): Promise<Record<string, un
   }
 }
 
+export function formatDailyContributionReportText(
+  summary: DailyContributionSummary,
+  projectTitle?: string
+): string {
+  const lines = [
+    `Community contribution tally — ${summary.date}`,
+    projectTitle ? `Project: ${projectTitle}` : "",
+    "",
+    `Paid: ${summary.collectedCount} entries · ${formatContributionInr(summary.collectedAmount)}`,
+    `Not paid: ${summary.pendingCount} entries · ${formatContributionInr(summary.pendingAmount)}`,
+    `Total registered today: ${summary.totalEntries}`,
+  ].filter(Boolean);
+
+  if (summary.byService.length > 0) {
+    lines.push("", "By service:");
+    for (const row of summary.byService) {
+      lines.push(
+        `• ${row.serviceName}: paid ${formatContributionInr(row.collectedAmount)} (${row.collectedCount}), not paid ${formatContributionInr(row.pendingAmount)} (${row.pendingCount})`
+      );
+    }
+  }
+
+  if (summary.byRecipient.length > 0) {
+    lines.push("", "By recipient:");
+    for (const row of summary.byRecipient) {
+      const label =
+        row.recipientType === "PARTNER"
+          ? row.partnerName || CONTRIBUTION_RECIPIENT_LABELS.PARTNER
+          : CONTRIBUTION_RECIPIENT_LABELS.NGO;
+      lines.push(
+        `• ${label}: paid ${formatContributionInr(row.collectedAmount)}, not paid ${formatContributionInr(row.pendingAmount)}`
+      );
+    }
+  }
+
+  return lines.join("\n");
+}
+
 export interface CommunityContributionRuleDto {
   id: string;
   projectId: string;

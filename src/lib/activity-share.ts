@@ -56,6 +56,36 @@ export function getUniqueLocations(beneficiaries: BeneficiaryEntry[]): string[] 
   return [...new Set(locations)];
 }
 
+export interface ContributionCounts {
+  paid: number;
+  notPaid: number;
+}
+
+export function getContributionCounts(beneficiaries: BeneficiaryEntry[]): ContributionCounts {
+  const counts: ContributionCounts = { paid: 0, notPaid: 0 };
+  for (const b of beneficiaries) {
+    if (b.contributionCollectionStatus === "COLLECTED") counts.paid++;
+    else if (b.contributionCollectionStatus === "PENDING") counts.notPaid++;
+  }
+  return counts;
+}
+
+export function formatContributionCountsLine(counts: ContributionCounts): string | null {
+  const total = counts.paid + counts.notPaid;
+  if (total === 0) return null;
+  return `💰 Community contribution: Paid ${counts.paid} · Not paid ${counts.notPaid}`;
+}
+
+export function getTasksContributionCounts(tasks: ActivityTask[]): ContributionCounts {
+  return tasks.reduce<ContributionCounts>(
+    (acc, task) => {
+      const c = getContributionCounts(task.beneficiaries ?? []);
+      return { paid: acc.paid + c.paid, notPaid: acc.notPaid + c.notPaid };
+    },
+    { paid: 0, notPaid: 0 }
+  );
+}
+
 export function getTodaysCompletedTasks(userId: string): ActivityTask[] {
   return getTasksForUser(userId)
     .filter((t) => t.status === "completed" && isTodayIso(t.completedAt))
@@ -101,6 +131,7 @@ export function buildSingleTaskShareMessage(
     gender.male + gender.female + gender.other > 0
       ? `\n👥 Boys: ${gender.male} · Girls: ${gender.female}${gender.other ? ` · Other: ${gender.other}` : ""}`
       : "";
+  const contributionLine = formatContributionCountsLine(getContributionCounts(task.beneficiaries ?? []));
 
   const lines = [
     `📋 *${orgName} — Field update*`,
@@ -116,6 +147,7 @@ export function buildSingleTaskShareMessage(
     mode !== "none" ? `👨‍👩‍👧 Total beneficiaries: *${total}*` : null,
     services ? `🩺 Service-wise: ${services}` : null,
     genderLine.trim() || null,
+    contributionLine,
     `📍 Location: ${place}`,
     task.notes?.trim() ? `\n📝 ${task.notes.trim()}` : null,
     ``,
@@ -136,6 +168,8 @@ export function buildTodaysActivityShareMessage(
   }
 
   const totalBeneficiaries = tasks.reduce((sum, t) => sum + getTaskBeneficiaryCount(t), 0);
+  const dayContributions = getTasksContributionCounts(tasks);
+  const dayContributionLine = formatContributionCountsLine(dayContributions);
   const header = [
     `📋 *${orgName} — Today's field work*`,
     ``,
@@ -143,6 +177,7 @@ export function buildTodaysActivityShareMessage(
     `📅 ${formatDateKey(localDateKey(new Date()))}`,
     `✅ ${tasks.length} activit${tasks.length === 1 ? "y" : "ies"} completed`,
     totalBeneficiaries > 0 ? `👨‍👩‍👧 Total beneficiaries reached: *${totalBeneficiaries}*` : null,
+    dayContributionLine,
     ``,
   ].filter(Boolean);
 
@@ -155,12 +190,14 @@ export function buildTodaysActivityShareMessage(
       gender.male + gender.female + gender.other > 0
         ? ` | Boys ${gender.male}, Girls ${gender.female}`
         : "";
+    const contributionBit = formatContributionCountsLine(getContributionCounts(task.beneficiaries ?? []));
 
     return [
       `*${index + 1}. ${task.title}*`,
       task.projectTitle,
       `${WORK_TYPE_LABELS[task.workType]}${total > 0 ? ` · ${total} people${genderBit}` : ""}`,
       services ? `Services: ${services}` : null,
+      contributionBit,
       `📍 ${place}`,
       task.notes?.trim() ? `Note: ${task.notes.trim()}` : null,
       ``,

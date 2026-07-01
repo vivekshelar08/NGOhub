@@ -10,7 +10,46 @@ import {
 } from "@/lib/activities";
 import type { CalendarEvent } from "@/lib/calendar-types";
 import { eachDateKey } from "@/lib/hr-utils";
-import { Role } from "@/generated/prisma/enums";
+import { CalendarWorkType, Role } from "@/generated/prisma/enums";
+
+export interface ActivityRequestCalendarInput {
+  id: string;
+  title: string;
+  description?: string | null;
+  workType: CalendarWorkType;
+  scheduledDate: string;
+  endDate?: string | null;
+  status?: string;
+  requestedById?: string;
+  requestedByName?: string;
+  department?: string | null;
+}
+
+export function activityRequestToCalendarEvent(req: ActivityRequestCalendarInput): CalendarEvent {
+  return {
+    id: req.id,
+    kind: "request",
+    title: req.title,
+    date: req.scheduledDate.slice(0, 10),
+    endDate: req.endDate ? req.endDate.slice(0, 10) : undefined,
+    status: req.status ?? "PENDING",
+    workType: req.workType,
+    details: req.description ?? undefined,
+    requestedBy: req.requestedByName,
+    requestedById: req.requestedById,
+    department: req.department,
+  };
+}
+
+export function activityRequestInDateRange(
+  req: ActivityRequestCalendarInput,
+  from: string,
+  to: string
+): boolean {
+  const start = req.scheduledDate.slice(0, 10);
+  const end = (req.endDate ?? req.scheduledDate).slice(0, 10);
+  return start <= to && end >= from;
+}
 
 export function getVisibleTasks(
   userId: string,
@@ -36,7 +75,7 @@ export function taskToCalendarEvent(
   task: ActivityTask,
   userNames: Map<string, string>
 ): CalendarEvent | null {
-  const date = (task.scheduledDate ?? task.rescheduledTo)?.slice(0, 10);
+  const date = (task.scheduledDate ?? task.rescheduledTo ?? task.createdAt)?.slice(0, 10);
   if (!date || task.status === "canceled") return null;
 
   return {
