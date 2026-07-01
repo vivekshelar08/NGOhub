@@ -5,6 +5,7 @@ import { Clock } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
+import { captureClientGps } from "@/lib/client-gps";
 
 interface TodayRecord {
   punchIn: string | null;
@@ -50,10 +51,15 @@ export function AttendancePunchWidget({
   async function handlePunch(action: "in" | "out") {
     setLoading(true);
     setMessage("");
+    const gps = action === "in" ? await captureClientGps() : {};
     const res = await fetch("/api/hr/attendance/punch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({
+        action,
+        ...gps,
+        locationType: action === "in" ? "OFFICE" : undefined,
+      }),
     });
     setLoading(false);
     if (!res.ok) {

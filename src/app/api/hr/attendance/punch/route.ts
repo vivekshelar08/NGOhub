@@ -4,12 +4,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/role-features";
 import { punchSchema } from "@/lib/validators";
 import { todayDateOnly } from "@/lib/hr-utils";
-import {
-  computeLateStatus,
-  ensureHrPolicySettings,
-  resolveLateMarkSettings,
-  serializePolicyFromDb,
-} from "@/lib/hr-profile";
+import { performPunchIn } from "@/lib/attendance-punch-server";
+import type { PunchLocationType } from "@/lib/field-work";
 
 export async function POST(request: Request) {
   const currentUser = await getCurrentUser();
@@ -25,17 +21,11 @@ export async function POST(request: Request) {
 
   const today = todayDateOnly();
   const now = new Date();
-
-  await ensureHrPolicySettings(prisma);
-  const orgPolicy = serializePolicyFromDb(
-    await prisma.hrPolicySettings.findUniqueOrThrow({ where: { id: "default" } })
-  );
-
-  const profile = await prisma.employeeProfile.findUnique({
-    where: { userId: currentUser.id },
-  });
-
-  const lateSettings = resolveLateMarkSettings(profile, orgPolicy);
+  const locationType = parsed.data.locationType as PunchLocationType | undefined;
+  const gps =
+    parsed.data.latitude != null && parsed.data.longitude != null
+      ? { latitude: parsed.data.latitude, longitude: parsed.data.longitude }
+      : undefined;
 
   if (parsed.data.action === "in") {
     const existing = await prisma.attendanceRecord.findUnique({
@@ -46,30 +36,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Already punched in today" }, { status: 409 });
     }
 
-    const late = computeLateStatus(now, lateSettings);
+    if (existing?.status === "LEAVE") {
+      return NextResponse.json(
+        { error: "You are marked on leave today. Request a correction if this is wrong." },
+        { status: 403 }
+      );
+    }
 
-    const record = await prisma.attendanceRecord.upsert({
-      where: { userId_date: { userId: currentUser.id, date: today } },
-      create: {
-        userId: currentUser.id,
-        date: today,
-        punchIn: now,
-        status: late.status,
-        lateMinutes: late.lateMinutes,
-        isLateMark: late.isLateMark,
-      },
-      update: {
-        punchIn: now,
-        status: late.status,
-        lateMinutes: late.lateMinutes,
-        isLateMark: late.isLateMark,
-      },
+    const record = await performPunchIn(prisma, currentUser.id, today, now, {
+      ...gps,
+      locationType,
     });
 
     return NextResponse.json({
       record,
-      lateInfo: late.isLateMark
-        ? { message: `Late by ${late.lateMinutes} minutes`, status: late.status }
+      lateInfo: record.isLateMark
+        ? { message: `Late by ${record.lateMinutes} minutes`, status: record.status }
         : null,
     });
   }
@@ -88,7 +70,12 @@ export async function POST(request: Request) {
 
   const updated = await prisma.attendanceRecord.update({
     where: { id: record.id },
-    data: { punchOut: now },
+    data: {
+      punchOut: now,
+      punchOutLatitude: parsed.data.latitude,
+      punchOutLongitude: parsed.data.longitude,
+      punchOutLocationType: locationType,
+    },
   });
 
   return NextResponse.json({ record: updated });

@@ -5,6 +5,7 @@ import { hasFeature } from "@/lib/role-features";
 import { leaveApplicationSchema, leaveActionSchema } from "@/lib/validators";
 import { parseDateOnly, decimalToNumber } from "@/lib/hr-utils";
 import { initLeaveBalance, serializePolicyFromDb } from "@/lib/hr-profile";
+import { syncAttendanceForLeaveApplication } from "@/lib/attendance-leave-sync";
 import {
   buildLeaveBalanceSummary,
   countLeaveDays,
@@ -114,36 +115,39 @@ export async function POST(request: Request) {
 
   const days = countLeaveDays(startDate, endDate);
   const year = startDate.getFullYear();
-  const leaveType = parsed.data.leaveType as LeaveTypeCode;
+  const leaveType = parsed.data.leaveType as LeaveTypeCode | "EM";
+  const isEmergency = parsed.data.isEmergency ?? leaveType === "EM";
 
-  let balanceRecord = await prisma.employeeLeaveBalance.findUnique({
-    where: { employeeProfileId_year: { employeeProfileId: profile.id, year } },
-  });
-
-  if (!balanceRecord) {
-    const settings = await prisma.hrPolicySettings.findUniqueOrThrow({ where: { id: "default" } });
-    await initLeaveBalance(prisma, profile.id, serializePolicyFromDb(settings).leave, year);
-    balanceRecord = await prisma.employeeLeaveBalance.findUniqueOrThrow({
+  if (leaveType !== "EM" && !isEmergency) {
+    let balanceRecord = await prisma.employeeLeaveBalance.findUnique({
       where: { employeeProfileId_year: { employeeProfileId: profile.id, year } },
     });
-  }
 
-  const pendingApplications = await prisma.leaveApplication.findMany({
-    where: { employeeProfileId: profile.id, status: "PENDING" },
-  });
-  const summary = buildLeaveBalanceSummary(
-    balanceRecord,
-    sumPendingLeaveDays(pendingApplications, year)
-  );
-  const typeBalance = getLeaveTypeBalance(summary, leaveType);
+    if (!balanceRecord) {
+      const settings = await prisma.hrPolicySettings.findUniqueOrThrow({ where: { id: "default" } });
+      await initLeaveBalance(prisma, profile.id, serializePolicyFromDb(settings).leave, year);
+      balanceRecord = await prisma.employeeLeaveBalance.findUniqueOrThrow({
+        where: { employeeProfileId_year: { employeeProfileId: profile.id, year } },
+      });
+    }
 
-  if (days > typeBalance.available) {
-    return NextResponse.json(
-      {
-        error: `Insufficient ${leaveType} balance. ${typeBalance.available} day(s) available (${typeBalance.used} used, ${typeBalance.pending} pending approval).`,
-      },
-      { status: 400 }
+    const pendingApplications = await prisma.leaveApplication.findMany({
+      where: { employeeProfileId: profile.id, status: "PENDING" },
+    });
+    const summary = buildLeaveBalanceSummary(
+      balanceRecord,
+      sumPendingLeaveDays(pendingApplications, year)
     );
+    const typeBalance = getLeaveTypeBalance(summary, leaveType as LeaveTypeCode);
+
+    if (days > typeBalance.available) {
+      return NextResponse.json(
+        {
+          error: `Insufficient ${leaveType} balance. ${typeBalance.available} day(s) available (${typeBalance.used} used, ${typeBalance.pending} pending approval).`,
+        },
+        { status: 400 }
+      );
+    }
   }
 
   const application = await prisma.leaveApplication.create({
@@ -154,6 +158,7 @@ export async function POST(request: Request) {
       endDate,
       days,
       reason: parsed.data.reason,
+      isEmergency: parsed.data.isEmergency ?? leaveType === "EM",
     },
   });
 
@@ -179,7 +184,7 @@ export async function PATCH(request: Request) {
 
   const application = await prisma.leaveApplication.findUnique({
     where: { id },
-    include: { employeeProfile: true },
+    include: { employeeProfile: { include: { user: { select: { id: true, name: true } } } } },
   });
 
   if (!application || application.status !== "PENDING") {
@@ -194,34 +199,62 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ application: updated });
   }
 
-  const year = application.startDate.getFullYear();
-  const balance = await prisma.employeeLeaveBalance.findUnique({
-    where: { employeeProfileId_year: { employeeProfileId: application.employeeProfileId, year } },
-  });
+  const isEmergency = application.isEmergency || application.leaveType === "EM";
 
-  if (!balance) {
-    return NextResponse.json({ error: "Leave balance not initialized" }, { status: 400 });
-  }
+  if (!isEmergency) {
+    const year = application.startDate.getFullYear();
+    const balance = await prisma.employeeLeaveBalance.findUnique({
+      where: { employeeProfileId_year: { employeeProfileId: application.employeeProfileId, year } },
+    });
 
-  const days = Number(application.days.toString());
-  const leaveField =
-    application.leaveType === "CL"
-      ? "casualLeaveUsed"
-      : application.leaveType === "SL"
-        ? "sickLeaveUsed"
-        : "earnedLeaveUsed";
-  const totalField =
-    application.leaveType === "CL"
-      ? "casualLeaveTotal"
-      : application.leaveType === "SL"
-        ? "sickLeaveTotal"
-        : "earnedLeaveTotal";
+    if (!balance) {
+      return NextResponse.json({ error: "Leave balance not initialized" }, { status: 400 });
+    }
 
-  const used = balance[leaveField as keyof typeof balance] as number;
-  const total = balance[totalField as keyof typeof balance] as number;
+    const days = Number(application.days.toString());
+    const leaveField =
+      application.leaveType === "CL"
+        ? "casualLeaveUsed"
+        : application.leaveType === "SL"
+          ? "sickLeaveUsed"
+          : "earnedLeaveUsed";
+    const totalField =
+      application.leaveType === "CL"
+        ? "casualLeaveTotal"
+        : application.leaveType === "SL"
+          ? "sickLeaveTotal"
+          : "earnedLeaveTotal";
 
-  if (used + days > total) {
-    return NextResponse.json({ error: "Insufficient leave balance" }, { status: 400 });
+    const used = balance[leaveField as keyof typeof balance] as number;
+    const total = balance[totalField as keyof typeof balance] as number;
+
+    if (used + days > total) {
+      return NextResponse.json({ error: "Insufficient leave balance" }, { status: 400 });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const app = await tx.leaveApplication.update({
+        where: { id },
+        data: { status: "APPROVED", approvedById: currentUser.id, approvedAt: new Date() },
+      });
+
+      await tx.employeeLeaveBalance.update({
+        where: { id: balance.id },
+        data: { [leaveField]: used + days },
+      });
+
+      await syncAttendanceForLeaveApplication(tx, application);
+      return app;
+    });
+
+    const tasksNeedingReassign = await prisma.fieldActivityTask.count({
+      where: {
+        assignedToUserId: application.employeeProfile.userId,
+        status: { in: ["assigned", "active"] },
+      },
+    });
+
+    return NextResponse.json({ application: updated, tasksNeedingReassign });
   }
 
   const updated = await prisma.$transaction(async (tx) => {
@@ -229,14 +262,21 @@ export async function PATCH(request: Request) {
       where: { id },
       data: { status: "APPROVED", approvedById: currentUser.id, approvedAt: new Date() },
     });
-
-    await tx.employeeLeaveBalance.update({
-      where: { id: balance.id },
-      data: { [leaveField]: used + days },
-    });
-
+    await syncAttendanceForLeaveApplication(tx, application);
     return app;
   });
 
-  return NextResponse.json({ application: updated });
+  const tasksNeedingReassign = await prisma.fieldActivityTask.count({
+    where: {
+      assignedToUserId: application.employeeProfile.userId,
+      status: { in: ["assigned", "active"] },
+    },
+  });
+
+  return NextResponse.json({
+    application: updated,
+    tasksNeedingReassign,
+    emergencyLeave: true,
+    assigneeName: application.employeeProfile.user.name,
+  });
 }

@@ -202,4 +202,46 @@ DO $$ BEGIN
     FOREIGN KEY ("enteredById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+ALTER TABLE "AttendanceRecord"
+  ADD COLUMN IF NOT EXISTS "punchInLatitude" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "punchInLongitude" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "punchOutLatitude" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "punchOutLongitude" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "punchInLocationType" TEXT,
+  ADD COLUMN IF NOT EXISTS "punchOutLocationType" TEXT,
+  ADD COLUMN IF NOT EXISTS "leaveApplicationId" TEXT;
+
+ALTER TABLE "HrPolicySettings"
+  ADD COLUMN IF NOT EXISTS "requirePunchForFieldTasks" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS "autoPunchOnTaskStart" BOOLEAN NOT NULL DEFAULT true;
+
+ALTER TABLE "LeaveApplication"
+  ADD COLUMN IF NOT EXISTS "isEmergency" BOOLEAN NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS "FieldVisitLog" (
+  "id" TEXT NOT NULL,
+  "userId" TEXT NOT NULL,
+  "taskId" TEXT NOT NULL,
+  "projectId" TEXT NOT NULL,
+  "attendanceRecordId" TEXT,
+  "workType" TEXT NOT NULL,
+  "startedAt" TIMESTAMP(3) NOT NULL,
+  "completedAt" TIMESTAMP(3),
+  "startLatitude" DOUBLE PRECISION,
+  "startLongitude" DOUBLE PRECISION,
+  "endLatitude" DOUBLE PRECISION,
+  "endLongitude" DOUBLE PRECISION,
+  "conveyanceFrom" TEXT,
+  "conveyanceTo" TEXT,
+  "conveyanceKm" DOUBLE PRECISION,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "FieldVisitLog_pkey" PRIMARY KEY ("id")
+);
+
+CREATE INDEX IF NOT EXISTS "FieldVisitLog_userId_idx" ON "FieldVisitLog"("userId");
+CREATE INDEX IF NOT EXISTS "FieldVisitLog_taskId_idx" ON "FieldVisitLog"("taskId");
+CREATE INDEX IF NOT EXISTS "FieldVisitLog_projectId_idx" ON "FieldVisitLog"("projectId");
+CREATE INDEX IF NOT EXISTS "FieldVisitLog_startedAt_idx" ON "FieldVisitLog"("startedAt");
 `;

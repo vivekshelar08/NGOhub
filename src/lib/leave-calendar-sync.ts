@@ -19,10 +19,16 @@ export async function getUsersOnLeaveForDate(prisma: PrismaClient, date: Date) {
     userId: l.employeeProfile.userId,
     userName: l.employeeProfile.user.name,
     leaveType: l.leaveType,
+    isEmergency: l.isEmergency,
+    reason: l.reason,
     startDate: l.startDate.toISOString().slice(0, 10),
     endDate: l.endDate.toISOString().slice(0, 10),
   }));
 }
+
+import { isEmergencyLeave } from "@/lib/leave-shared";
+
+export { isEmergencyLeave };
 
 export async function canAssignFieldWork(
   prisma: PrismaClient,

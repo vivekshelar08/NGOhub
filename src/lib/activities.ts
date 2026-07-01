@@ -100,6 +100,8 @@ export interface ActivityTask {
   evidenceLatitude?: number;
   evidenceLongitude?: number;
   evidenceCapturedAt?: string;
+  /** Linked approved activity request id */
+  activityRequestId?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -33,6 +33,7 @@ import {
   WORK_TYPE_LABELS,
 } from "@/lib/activities";
 import { syncBeneficiariesToPortal } from "@/lib/beneficiary-sync";
+import { captureClientGps } from "@/lib/client-gps";
 import { getProjectById } from "@/lib/projects";
 import { projectRequiresServiceOnEnrollment } from "@/lib/projectMeta";
 import { exportActivityTaskExcel } from "@/lib/activityExport";
@@ -109,17 +110,36 @@ export function TaskExecutionPanel({
     "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-teal focus:outline-none focus:ring-1 focus:ring-brand-teal";
   const labelClass = "mb-1 block text-sm font-medium text-slate-700";
 
-  function handleStart() {
+  async function handleStart() {
     const dateCheck = validateActivityDate(task.scheduledDate ?? task.rescheduledTo);
     if (!dateCheck.ok) {
       setError(dateCheck.message ?? "Cannot start this activity today.");
       return;
     }
     setBusy(true);
-    startTask(task.id);
-    setBusy(false);
-    onStartFocus?.();
-    onUpdate();
+    setError("");
+    try {
+      const gps = await captureClientGps();
+      const res = await fetch("/api/field-work/start-task", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId: task.id, ...gps }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.code === "PUNCH_REQUIRED") {
+          setError("Punch in from HR / dashboard before starting field work.");
+        } else {
+          setError(data.error ?? "Could not start task");
+        }
+        return;
+      }
+      startTask(task.id);
+      onStartFocus?.();
+      onUpdate();
+    } finally {
+      setBusy(false);
+    }
   }
 
   function handleReschedule() {
@@ -141,6 +161,26 @@ export function TaskExecutionPanel({
     setShowCancel(false);
     onExitFocus?.();
     onUpdate();
+  }
+
+  async function logFieldVisitComplete(evidence: {
+    evidenceLatitude?: number;
+    evidenceLongitude?: number;
+  }) {
+    const place =
+      task.beneficiaries?.[0]?.location?.trim() ||
+      task.beneficiaries?.[0]?.address?.trim() ||
+      undefined;
+    await fetch("/api/field-work/complete-visit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        taskId: task.id,
+        latitude: evidence.evidenceLatitude,
+        longitude: evidence.evidenceLongitude,
+        locationLabel: place,
+      }),
+    }).catch(() => {});
   }
 
   async function handleComplete() {
@@ -189,6 +229,7 @@ export function TaskExecutionPanel({
           setError("This activity can only be completed on its scheduled date.");
           return;
         }
+        await logFieldVisitComplete(evidence);
         onExitFocus?.();
         onUpdate();
       } catch (err) {
@@ -218,6 +259,7 @@ export function TaskExecutionPanel({
         setBusy(false);
         return;
       }
+      await logFieldVisitComplete(evidence);
     } else {
       setBusy(true);
       const evidence = await captureFieldEvidence();
@@ -233,6 +275,7 @@ export function TaskExecutionPanel({
         setBusy(false);
         return;
       }
+      await logFieldVisitComplete(evidence);
     }
 
     setBusy(false);

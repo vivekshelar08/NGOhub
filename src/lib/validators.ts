@@ -104,6 +104,9 @@ export const updateEmployeeProfileSchema = employeeProfileSchema.partial().omit(
 
 export const punchSchema = z.object({
   action: z.enum(["in", "out"]),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  locationType: z.enum(["OFFICE", "FIELD", "WFH"]).optional(),
 });
 
 export const payrollRunSchema = z.object({
@@ -140,7 +143,8 @@ export const enrollCompleteSchema = z.object({
 });
 
 export const leaveApplicationSchema = z.object({
-  leaveType: z.enum(["CL", "SL", "EL"]),
+  leaveType: z.enum(["CL", "SL", "EL", "EM"]),
+  isEmergency: z.boolean().optional(),
   startDate: z.string(),
   endDate: z.string(),
   reason: z.string().optional(),

@@ -26,10 +26,15 @@ interface LeaveManagementPanelProps {
   onFlash: (msg: string, isError?: boolean) => void;
 }
 
-const LEAVE_TYPE_OPTIONS: Array<{ value: LeaveTypeCode; key: keyof Pick<LeaveBalanceSummary, "casual" | "sick" | "earned">; label: string }> = [
+const LEAVE_TYPE_OPTIONS: Array<{
+  value: LeaveTypeCode | "EM";
+  key: keyof Pick<LeaveBalanceSummary, "casual" | "sick" | "earned"> | null;
+  label: string;
+}> = [
   { value: "CL", key: "casual", label: "Casual Leave" },
   { value: "SL", key: "sick", label: "Sick Leave" },
   { value: "EL", key: "earned", label: "Earned Leave" },
+  { value: "EM", key: null, label: "Emergency Leave" },
 ];
 
 function countRequestedDays(startDate: string, endDate: string): number | null {
@@ -44,7 +49,7 @@ export function LeaveManagementPanel({ canManageHr, onFlash }: LeaveManagementPa
   const [balance, setBalance] = useState<LeaveBalanceSummary | null>(null);
   const [applications, setApplications] = useState<LeaveApplication[]>([]);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ leaveType: "CL" as LeaveTypeCode, startDate: "", endDate: "", reason: "" });
+  const [form, setForm] = useState({ leaveType: "CL" as LeaveTypeCode | "EM", startDate: "", endDate: "", reason: "" });
 
   const load = useCallback(async () => {
     const url = canManageHr ? "/api/hr/leave?all=1" : "/api/hr/leave";
@@ -73,9 +78,9 @@ export function LeaveManagementPanel({ canManageHr, onFlash }: LeaveManagementPa
   );
 
   const selectedBalance = useMemo(() => {
-    if (!balance) return null;
+    if (!balance || form.leaveType === "EM") return null;
     const option = LEAVE_TYPE_OPTIONS.find((item) => item.value === form.leaveType);
-    return option ? balance[option.key] : null;
+    return option?.key ? balance[option.key] : null;
   }, [balance, form.leaveType]);
 
   const remainingAfterRequest =
@@ -85,9 +90,8 @@ export function LeaveManagementPanel({ canManageHr, onFlash }: LeaveManagementPa
     !loading &&
     requestedDays != null &&
     requestedDays > 0 &&
-    selectedBalance != null &&
-    remainingAfterRequest != null &&
-    remainingAfterRequest >= 0;
+    (form.leaveType === "EM" ||
+      (selectedBalance != null && remainingAfterRequest != null && remainingAfterRequest >= 0));
 
   async function submitLeave(e: React.FormEvent) {
     e.preventDefault();
@@ -124,7 +128,15 @@ export function LeaveManagementPanel({ canManageHr, onFlash }: LeaveManagementPa
       onFlash(data.error ?? "Action failed", true);
       return;
     }
-    onFlash(action === "approve" ? "Leave approved" : "Leave rejected");
+    const data = await res.json();
+    if (action === "approve" && data.tasksNeedingReassign > 0) {
+      onFlash(
+        `Leave approved. ${data.tasksNeedingReassign} field task(s) need urgent reassignment — check Field work → Assign.`,
+        false
+      );
+    } else {
+      onFlash(action === "approve" ? "Leave approved" : "Leave rejected");
+    }
     load();
   }
 
@@ -132,8 +144,8 @@ export function LeaveManagementPanel({ canManageHr, onFlash }: LeaveManagementPa
     <div className="space-y-6">
       {balance ? (
         <div className="grid gap-4 sm:grid-cols-3">
-          {LEAVE_TYPE_OPTIONS.map((item) => {
-            const data = balance[item.key];
+          {LEAVE_TYPE_OPTIONS.filter((item) => item.key).map((item) => {
+            const data = balance[item.key!];
             const isSelected = form.leaveType === item.value;
             return (
               <Card
@@ -164,6 +176,11 @@ export function LeaveManagementPanel({ canManageHr, onFlash }: LeaveManagementPa
 
       <Card>
         <CardTitle className="mb-4 text-lg">Apply for Leave</CardTitle>
+        {form.leaveType === "EM" && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+            Emergency leave does not use CL/SL/EL balance. Assigned field tasks may need manager reassignment.
+          </div>
+        )}
         {selectedBalance && (
           <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
             <p className="font-medium text-slate-900">
@@ -196,7 +213,9 @@ export function LeaveManagementPanel({ canManageHr, onFlash }: LeaveManagementPa
             <select
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
               value={form.leaveType}
-              onChange={(e) => setForm({ ...form, leaveType: e.target.value as LeaveTypeCode })}
+              onChange={(e) =>
+                setForm({ ...form, leaveType: e.target.value as LeaveTypeCode | "EM" })
+              }
             >
               {LEAVE_TYPE_OPTIONS.map((item) => (
                 <option key={item.value} value={item.value}>

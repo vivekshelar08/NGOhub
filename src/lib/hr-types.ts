@@ -121,6 +121,7 @@ export const LEAVE_TYPE_LABELS: Record<string, string> = {
   CL: "Casual Leave",
   SL: "Sick Leave",
   EL: "Earned Leave",
+  EM: "Emergency Leave",
 };
 
 export const LEAVE_STATUS_LABELS: Record<string, string> = {

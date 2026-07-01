@@ -35,6 +35,8 @@ import {
 import { exportActivityTasksExcel } from "@/lib/activityExport";
 import { exportActivityBeneficiariesExcel } from "@/lib/activityBeneficiaryExport";
 import { TodaysActivityShareButton } from "@/components/activities/TodaysActivityShareButton";
+import { FieldDayStatusStrip } from "@/components/activities/FieldDayStatusStrip";
+import { PriorityReassignPanel } from "@/components/activities/PriorityReassignPanel";
 import { AssignTaskDraft, requestToAssignDraft } from "@/lib/activity-request-utils";
 
 interface ActivitiesViewProps {
@@ -374,6 +376,12 @@ export function ActivitiesView({
 
       {mainView === "tasks" && (
         <>
+          <FieldDayStatusStrip />
+
+          {canAssign && (
+            <PriorityReassignPanel onReassign={handleEditTask} />
+          )}
+
           {/* Summary chips */}
           <div className="flex flex-wrap gap-3">
             <SummaryChip

@@ -18,6 +18,9 @@ import {
 } from "@/lib/activities";
 import { AssignTaskDraft } from "@/lib/activity-request-utils";
 import { ProjectProposal } from "@/lib/projects";
+import { LEAVE_TYPE_LABELS } from "@/lib/hr-types";
+import { isEmergencyLeave } from "@/lib/leave-shared";
+import { localDateKey } from "@/lib/hr-utils";
 
 interface AssignableUser {
   id: string;
@@ -63,6 +66,18 @@ export function AssignTaskForm({
   const [scheduledDate, setScheduledDate] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [onLeaveForDate, setOnLeaveForDate] = useState<
+    Array<{
+      userId: string;
+      userName: string;
+      leaveType: string;
+      isEmergency?: boolean;
+      reason?: string | null;
+      startDate: string;
+      endDate: string;
+    }>
+  >([]);
+  const [assignDespiteLeave, setAssignDespiteLeave] = useState(false);
 
   const selectedProject = projects.find((p) => p.id === projectId);
 
@@ -103,6 +118,19 @@ export function AssignTaskForm({
     }
   }, [draft, editTask]);
 
+  useEffect(() => {
+    const date = scheduledDate || localDateKey();
+    fetch(`/api/hr/leave/availability?date=${encodeURIComponent(date)}`)
+      .then((r) => (r.ok ? r.json() : { onLeave: [] }))
+      .then((data) => setOnLeaveForDate(data.onLeave ?? []))
+      .catch(() => setOnLeaveForDate([]));
+    setAssignDespiteLeave(false);
+  }, [scheduledDate]);
+
+  const selectedAssigneeLeave = onLeaveForDate.find((l) => l.userId === assignedToUserId);
+  const assigneeOnEmergencyLeave =
+    selectedAssigneeLeave && isEmergencyLeave(selectedAssigneeLeave);
+
   const milestones = selectedProject?.setup?.milestones ?? [];
 
   const kpis = useMemo(() => {
@@ -138,6 +166,13 @@ export function AssignTaskForm({
 
     if (!projectId || !title.trim() || !assignedToUserId) {
       setError("Project, title, and staff assignment are required.");
+      return;
+    }
+
+    if (selectedAssigneeLeave && !assignDespiteLeave) {
+      setError(
+        `${selectedAssigneeLeave.userName} is on ${LEAVE_TYPE_LABELS[selectedAssigneeLeave.leaveType] ?? selectedAssigneeLeave.leaveType} (${selectedAssigneeLeave.startDate} – ${selectedAssigneeLeave.endDate}). Check "Assign anyway" to continue or pick another staff member.`
+      );
       return;
     }
 
@@ -183,6 +218,7 @@ export function AssignTaskForm({
       photoAttachments: editTask?.photoAttachments,
       pdfAttachments: editTask?.pdfAttachments,
       notes: editTask?.notes,
+      activityRequestId: editTask?.activityRequestId ?? draft?.activityRequestId,
       createdAt: editTask?.createdAt ?? now,
       updatedAt: now,
     });
@@ -480,11 +516,17 @@ export function AssignTaskForm({
             <option value="">
               {loadingUsers ? "Loading staff…" : "Select staff member…"}
             </option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name} ({u.role})
-              </option>
-            ))}
+            {users.map((u) => {
+              const leave = onLeaveForDate.find((l) => l.userId === u.id);
+              const onLeaveLabel = leave
+                ? ` — ON LEAVE${isEmergencyLeave(leave) ? " (EMERGENCY)" : ""}`
+                : "";
+              return (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.role}){onLeaveLabel}
+                </option>
+              );
+            })}
           </select>
         </div>
         <div>
@@ -497,6 +539,32 @@ export function AssignTaskForm({
           />
         </div>
       </div>
+
+      {selectedAssigneeLeave && (
+        <div
+          className={cn(
+            "rounded-lg border px-3 py-2 text-sm",
+            assigneeOnEmergencyLeave
+              ? "border-red-200 bg-red-50 text-red-900"
+              : "border-amber-200 bg-amber-50 text-amber-900"
+          )}
+        >
+          <strong>{selectedAssigneeLeave.userName}</strong> is on{" "}
+          {LEAVE_TYPE_LABELS[selectedAssigneeLeave.leaveType] ?? selectedAssigneeLeave.leaveType}{" "}
+          from {selectedAssigneeLeave.startDate} to {selectedAssigneeLeave.endDate}.
+          {assigneeOnEmergencyLeave
+            ? " Emergency leave — reassign to another staff member if possible."
+            : " Consider another assignee or reschedule."}
+          <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs font-medium">
+            <input
+              type="checkbox"
+              checked={assignDespiteLeave}
+              onChange={(e) => setAssignDespiteLeave(e.target.checked)}
+            />
+            Assign anyway (staff notified — manager should reassign if unavailable)
+          </label>
+        </div>
+      )}
 
       <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
         <Button type="button" variant="secondary" onClick={onCancel}>
