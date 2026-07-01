@@ -51,33 +51,46 @@ export function AttendancePunchWidget({
   async function handlePunch(action: "in" | "out") {
     setLoading(true);
     setMessage("");
-    const gps = action === "in" ? await captureClientGps() : {};
-    const res = await fetch("/api/hr/attendance/punch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action,
-        ...gps,
-        locationType: action === "in" ? "OFFICE" : undefined,
-      }),
-    });
-    setLoading(false);
-    if (!res.ok) {
+    try {
+      const gps = action === "in" ? await captureClientGps() : {};
+      const hasGps = gps.latitude != null && gps.longitude != null;
+      const res = await fetch("/api/hr/attendance/punch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          ...gps,
+          locationType: action === "in" && hasGps ? "OFFICE" : undefined,
+        }),
+      });
+      if (!res.ok) {
+        let errText = "Punch failed";
+        try {
+          const data = await res.json();
+          errText = data.error ?? errText;
+        } catch {
+          errText = res.statusText || errText;
+        }
+        setMessage(errText);
+        setIsError(true);
+        return;
+      }
       const data = await res.json();
-      setMessage(data.error ?? "Punch failed");
+      if (data.lateInfo) {
+        setMessage(data.lateInfo.message);
+        setIsError(true);
+      } else {
+        setMessage(action === "in" ? "Punched in successfully" : "Punched out successfully");
+        setIsError(false);
+      }
+      loadToday();
+      setTimeout(() => setMessage(""), 4000);
+    } catch {
+      setMessage("Network error — please try again");
       setIsError(true);
-      return;
+    } finally {
+      setLoading(false);
     }
-    const data = await res.json();
-    if (data.lateInfo) {
-      setMessage(data.lateInfo.message);
-      setIsError(true);
-    } else {
-      setMessage(action === "in" ? "Punched in successfully" : "Punched out successfully");
-      setIsError(false);
-    }
-    loadToday();
-    setTimeout(() => setMessage(""), 4000);
   }
 
   const punchedIn = !!todayRecord?.punchIn;
